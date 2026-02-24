@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transmigrasi: Membangun Negeri</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            prefix: 'tw-',
+            corePlugins: { preflight: false }
+        }
+    </script>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="loading-content">
+            <h1>🏘️ Transmigrasi</h1>
+            <h2>Membangun Negeri</h2>
+            <div class="loading-bar-container">
+                <div class="loading-bar" id="loading-bar"></div>
+            </div>
+            <p id="loading-text">Memuat dunia...</p>
+        </div>
+    </div>
+
+    <!-- Intro Screen -->
+    <div id="intro-screen" style="display:none;">
+        <div class="intro-content">
+            <h1>🏘️ Transmigrasi: Membangun Negeri</h1>
+            <p class="intro-desc">Bangun kawasan transmigrasi dari hutan belantara hingga menjadi kota yang makmur. 
+            Kelola sumber daya, bangun infrastruktur, kembangkan ekonomi, dan tingkatkan kesejahteraan penduduk.</p>
+            <div class="intro-features">
+                <div class="feature"><span>🏗️</span><p>Pembangunan</p></div>
+                <div class="feature"><span>🌾</span><p>Pertanian</p></div>
+                <div class="feature"><span>🏪</span><p>Ekonomi</p></div>
+                <div class="feature"><span>🏫</span><p>Pendidikan</p></div>
+                <div class="feature"><span>🏥</span><p>Kesehatan</p></div>
+                <div class="feature"><span>👥</span><p>Sosial</p></div>
+            </div>
+            <button id="btn-start" class="btn-primary">Mulai Membangun</button>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" style="display:none;">
+        <!-- Top Bar -->
+        <div id="top-bar">
+            <div class="resource-group">
+                <div class="resource" title="Dana">
+                    <span class="res-icon">💰</span>
+                    <span class="res-label">Dana</span>
+                    <span class="res-value" id="res-dana">Rp 50.000</span>
+                </div>
+                <div class="resource" title="Pangan">
+                    <span class="res-icon">🌾</span>
+                    <span class="res-label">Pangan</span>
+                    <span class="res-value" id="res-pangan">100</span>
+                </div>
+                <div class="resource" title="Material">
+                    <span class="res-icon">🧱</span>
+                    <span class="res-label">Material</span>
+                    <span class="res-value" id="res-material">80</span>
+                </div>
+                <div class="resource" title="Populasi">
+                    <span class="res-icon">👥</span>
+                    <span class="res-label">Populasi</span>
+                    <span class="res-value" id="res-populasi">20/20</span>
+                </div>
+            </div>
+            <div class="status-group">
+                <div class="status-bar-item" title="Kebahagiaan">
+                    <span>😊</span>
+                    <div class="status-bar"><div class="status-fill happiness" id="bar-happiness" style="width:70%"></div></div>
+                    <span class="status-val" id="val-happiness">70%</span>
+                </div>
+                <div class="status-bar-item" title="Pendidikan">
+                    <span>📚</span>
+                    <div class="status-bar"><div class="status-fill education" id="bar-education" style="width:10%"></div></div>
+                    <span class="status-val" id="val-education">10%</span>
+                </div>
+                <div class="status-bar-item" title="Kesehatan">
+                    <span>❤️</span>
+                    <div class="status-bar"><div class="status-fill health" id="bar-health" style="width:60%"></div></div>
+                    <span class="status-val" id="val-health">60%</span>
+                </div>
+            </div>
+            <div class="time-group">
+                <span id="game-stage" class="stage-badge">Tahap Perintisan</span>
+                <span id="game-time">Bulan 1, Tahun 1</span>
+                <div class="speed-controls">
+                    <button class="btn-speed active" data-speed="1">▶</button>
+                    <button class="btn-speed" data-speed="2">▶▶</button>
+                    <button class="btn-speed" data-speed="4">▶▶▶</button>
+                    <button class="btn-speed" data-speed="0">⏸</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Game Area -->
+        <div id="game-area">
+            <canvas id="game-canvas"></canvas>
+            
+            <!-- Mini Map -->
+            <canvas id="mini-map" width="180" height="180"></canvas>
+
+            <!-- Help Button -->
+            <button id="btn-help" title="Panduan Bermain" class="tw-absolute tw-bottom-3 tw-left-[204px] tw-w-10 tw-h-10 tw-rounded-full tw-bg-slate-900/85 tw-border-2 tw-border-sky-300/25 tw-text-sky-300 tw-text-lg tw-cursor-pointer tw-backdrop-blur-md tw-z-[15] tw-flex tw-items-center tw-justify-center tw-transition-all hover:tw-bg-sky-600/30 hover:tw-border-sky-300/50 hover:tw-scale-110">❓</button>
+        </div>
+
+        <!-- Side Panel -->
+        <div id="side-panel">
+            <div class="panel-tabs">
+                <button class="panel-tab active" data-tab="build">🏗️ Bangun</button>
+                <button class="panel-tab" data-tab="info">📊 Info</button>
+                <button class="panel-tab" data-tab="event">📜 Event</button>
+            </div>
+
+            <div class="panel-content" id="tab-build">
+                <div class="build-category">
+                    <h3>🏠 Pemukiman</h3>
+                    <div class="build-grid" id="build-housing"></div>
+                </div>
+                <div class="build-category">
+                    <h3>🌾 Pertanian</h3>
+                    <div class="build-grid" id="build-farming"></div>
+                </div>
+                <div class="build-category">
+                    <h3>🏢 Fasilitas Umum</h3>
+                    <div class="build-grid" id="build-public"></div>
+                </div>
+                <div class="build-category">
+                    <h3>💼 Ekonomi</h3>
+                    <div class="build-grid" id="build-economy"></div>
+                </div>
+                <div class="build-category">
+                    <h3>🛤️ Infrastruktur</h3>
+                    <div class="build-grid" id="build-infra"></div>
+                </div>
+            </div>
+
+            <div class="panel-content" id="tab-info" style="display:none;">
+                <div id="info-content">
+                    <h3>Statistik Kawasan</h3>
+                    <div id="stats-container"></div>
+                </div>
+            </div>
+
+            <div class="panel-content" id="tab-event" style="display:none;">
+                <div id="event-log"></div>
+            </div>
+
+        </div>
+
+        <!-- Building Info Tooltip -->
+        <div id="building-tooltip" style="display:none;">
+            <h4 id="tooltip-title"></h4>
+            <p id="tooltip-desc"></p>
+            <div id="tooltip-stats"></div>
+            <div id="tooltip-requirements"></div>
+        </div>
+
+        <!-- Notification Area -->
+        <div id="notifications"></div>
+
+        <!-- Event Modal -->
+        <div id="event-modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-icon" id="modal-icon">📢</div>
+                <h3 id="modal-title">Event</h3>
+                <p id="modal-desc">Description</p>
+                <div id="modal-effects"></div>
+                <button id="modal-close" class="btn-primary">Mengerti</button>
+            </div>
+        </div>
+
+        <!-- Guide Modal Popup -->
+        <div id="guide-modal" style="display:none;" class="tw-fixed tw-inset-0 tw-bg-black/60 tw-backdrop-blur-sm tw-flex tw-items-center tw-justify-center tw-z-[600]">
+            <div class="tw-bg-gradient-to-br tw-from-slate-900 tw-to-slate-800 tw-border tw-border-sky-400/20 tw-rounded-2xl tw-w-[520px] tw-max-w-[90vw] tw-max-h-[85vh] tw-flex tw-flex-col tw-shadow-2xl tw-shadow-sky-900/30">
+                <!-- Header -->
+                <div class="tw-flex tw-items-center tw-justify-between tw-px-6 tw-py-4 tw-border-b tw-border-sky-400/10 tw-shrink-0">
+                    <h2 class="tw-text-lg tw-font-bold tw-text-sky-300">📖 Panduan Bermain</h2>
+                    <button id="guide-modal-close" class="tw-w-8 tw-h-8 tw-rounded-full tw-bg-sky-400/10 tw-border tw-border-sky-400/15 tw-text-sky-400 tw-text-sm tw-flex tw-items-center tw-justify-center tw-cursor-pointer tw-transition-all hover:tw-bg-red-500/20 hover:tw-border-red-400/30 hover:tw-text-red-400">✕</button>
+                </div>
+                <!-- Scrollable Body -->
+                <div class="tw-overflow-y-auto tw-px-6 tw-py-4 tw-space-y-5" style="scrollbar-width:thin;scrollbar-color:rgba(56,189,248,0.2) transparent;">
+
+                    <!-- Tujuan -->
+                    <div>
+                        <h3 class="tw-text-sm tw-font-semibold tw-text-sky-300 tw-mb-2">🎯 Tujuan Permainan</h3>
+                        <p class="tw-text-[13px] tw-text-slate-400 tw-leading-relaxed">Bangun kawasan transmigrasi dari <b class="tw-text-sky-200">hutan belantara</b> hingga berkembang menjadi <b class="tw-text-sky-200">Kota Metropolitan</b> dengan 1500+ penduduk.</p>
+                    </div>
+
+                    <hr class="tw-border-sky-400/10">
+
+                    <!-- Kontrol -->
+                    <div>
+                        <h3 class="tw-text-sm tw-font-semibold tw-text-sky-300 tw-mb-3">🕹️ Kontrol</h3>
+                        <div class="tw-grid tw-grid-cols-2 tw-gap-2">
+                            <div class="tw-flex tw-items-center tw-gap-2">
+                                <kbd class="tw-px-2 tw-py-1 tw-rounded tw-bg-sky-400/10 tw-border tw-border-sky-400/20 tw-text-sky-200 tw-font-mono tw-text-xs">Klik + Geser</kbd>
+                                <span class="tw-text-xs tw-text-slate-500">Geser kamera</span>
+                            </div>
+                            <div class="tw-flex tw-items-center tw-gap-2">
+                                <kbd class="tw-px-2 tw-py-1 tw-rounded tw-bg-sky-400/10 tw-border tw-border-sky-400/20 tw-text-sky-200 tw-font-mono tw-text-xs">Scroll</kbd>
+                                <span class="tw-text-xs tw-text-slate-500">Zoom in/out</span>
+                            </div>
+                            <div class="tw-flex tw-items-center tw-gap-2">
+                                <kbd class="tw-px-2 tw-py-1 tw-rounded tw-bg-sky-400/10 tw-border tw-border-sky-400/20 tw-text-sky-200 tw-font-mono tw-text-xs">Klik Peta</kbd>
+                                <span class="tw-text-xs tw-text-slate-500">Letakkan bangunan</span>
+                            </div>
+                            <div class="tw-flex tw-items-center tw-gap-2">
+                                <kbd class="tw-px-2 tw-py-1 tw-rounded tw-bg-sky-400/10 tw-border tw-border-sky-400/20 tw-text-sky-200 tw-font-mono tw-text-xs">▶ ▶▶ ⏸</kbd>
+                                <span class="tw-text-xs tw-text-slate-500">Kecepatan waktu</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="tw-border-sky-400/10">
+
+                    <!-- Sumber Daya -->
+                    <div>
+                        <h3 class="tw-text-sm tw-font-semibold tw-text-sky-300 tw-mb-3">📦 Sumber Daya & Indikator</h3>
+                        <div class="tw-grid tw-grid-cols-2 tw-gap-2">
+                            <div class="tw-bg-sky-400/[0.05] tw-rounded-lg tw-p-2.5 tw-border tw-border-sky-400/[0.08]">
+                                <div class="tw-text-xs tw-font-medium tw-text-sky-200 tw-mb-1">💰 Dana</div>
+                                <div class="tw-text-[11px] tw-text-slate-500 tw-leading-snug">Untuk membangun. Dari produksi & pajak.</div>
+                            </div>
+                            <div class="tw-bg-sky-400/[0.05] tw-rounded-lg tw-p-2.5 tw-border tw-border-sky-400/[0.08]">
+                                <div class="tw-text-xs tw-font-medium tw-text-sky-200 tw-mb-1">🌾 Pangan</div>
+                                <div class="tw-text-[11px] tw-text-slate-500 tw-leading-snug">Konsumsi 0.5/org/bln. Habis = kelaparan!</div>
+                            </div>
+                            <div class="tw-bg-sky-400/[0.05] tw-rounded-lg tw-p-2.5 tw-border tw-border-sky-400/[0.08]">
+                                <div class="tw-text-xs tw-font-medium tw-text-sky-200 tw-mb-1">🧱 Material</div>
+                                <div class="tw-text-[11px] tw-text-slate-500 tw-leading-snug">Untuk bangun. Dari gudang & pabrik.</div>
+                            </div>
+                            <div class="tw-bg-sky-400/[0.05] tw-rounded-lg tw-p-2.5 tw-border tw-border-sky-400/[0.08]">
+                                <div class="tw-text-xs tw-font-medium tw-text-sky-200 tw-mb-1">👥 Populasi</div>
+                                <div class="tw-text-[11px] tw-text-slate-500 tw-leading-snug">Tumbuh jika senang & sehat. Butuh rumah.</div>
+                            </div>
+                            <div class="tw-bg-amber-400/[0.05] tw-rounded-lg tw-p-2.5 tw-border tw-border-amber-400/[0.08]">
+                                <div class="tw-text-xs tw-font-medium tw-text-amber-300">😊 Kebahagiaan</div>
+                                <div class="tw-text-[11px] tw-text-slate-500 tw-leading-snug">Harus &gt;40% agar populasi tumbuh.</div>
+                            </div>
+                            <div class="tw-bg-blue-400/[0.05] tw-rounded-lg tw-p-2.5 tw-border tw-border-blue-400/[0.08]">
+                                <div class="tw-text-xs tw-font-medium tw-text-blue-300">📚 Pendidikan</div>
+                                <div class="tw-text-[11px] tw-text-slate-500 tw-leading-snug">Bonus produksi s/d +50%.</div>
+                            </div>
+                            <div class="tw-bg-red-400/[0.05] tw-rounded-lg tw-p-2.5 tw-border tw-border-red-400/[0.08] tw-col-span-2">
+                                <div class="tw-text-xs tw-font-medium tw-text-red-300">❤️ Kesehatan</div>
+                                <div class="tw-text-[11px] tw-text-slate-500 tw-leading-snug">Harus &gt;30% agar tumbuh. &lt;30% produksi -50%. Butuh puskesmas/RS.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="tw-border-sky-400/10">
+
+                    <!-- Tahap -->
+                    <div>
+                        <h3 class="tw-text-sm tw-font-semibold tw-text-sky-300 tw-mb-3">🏙️ Tahap Perkembangan</h3>
+                        <div class="tw-space-y-2">
+                            <div class="tw-flex tw-items-start tw-gap-3 tw-bg-sky-400/[0.03] tw-rounded-lg tw-p-3 tw-border tw-border-sky-400/[0.06] tw-border-l-[3px] tw-border-l-amber-500/70">
+                                <span class="tw-shrink-0 tw-w-6 tw-h-6 tw-rounded-full tw-bg-amber-500/20 tw-text-amber-400 tw-text-[11px] tw-font-bold tw-flex tw-items-center tw-justify-center">1</span>
+                                <div>
+                                    <div class="tw-text-xs tw-font-semibold tw-text-sky-200">Perintisan <span class="tw-font-normal tw-text-slate-600">— mulai</span></div>
+                                    <div class="tw-text-[11px] tw-text-slate-500 tw-mt-0.5">Rumah, Sawah, Ladang, Masjid, Pasar, Gudang, Jalan</div>
+                                </div>
+                            </div>
+                            <div class="tw-flex tw-items-start tw-gap-3 tw-bg-sky-400/[0.03] tw-rounded-lg tw-p-3 tw-border tw-border-sky-400/[0.06] tw-border-l-[3px] tw-border-l-emerald-500/70">
+                                <span class="tw-shrink-0 tw-w-6 tw-h-6 tw-rounded-full tw-bg-emerald-500/20 tw-text-emerald-400 tw-text-[11px] tw-font-bold tw-flex tw-items-center tw-justify-center">2</span>
+                                <div>
+                                    <div class="tw-text-xs tw-font-semibold tw-text-sky-200">Desa Berkembang <span class="tw-font-normal tw-text-slate-600">— 50 penduduk</span></div>
+                                    <div class="tw-text-[11px] tw-text-slate-500 tw-mt-0.5">+ Sekolah, Puskesmas, Balai Desa, Perkebunan, Koperasi, Taman, dll</div>
+                                </div>
+                            </div>
+                            <div class="tw-flex tw-items-start tw-gap-3 tw-bg-sky-400/[0.03] tw-rounded-lg tw-p-3 tw-border tw-border-sky-400/[0.06] tw-border-l-[3px] tw-border-l-blue-500/70">
+                                <span class="tw-shrink-0 tw-w-6 tw-h-6 tw-rounded-full tw-bg-blue-500/20 tw-text-blue-400 tw-text-[11px] tw-font-bold tw-flex tw-items-center tw-justify-center">3</span>
+                                <div>
+                                    <div class="tw-text-xs tw-font-semibold tw-text-sky-200">Kota Kecil <span class="tw-font-normal tw-text-slate-600">— 300 penduduk</span></div>
+                                    <div class="tw-text-[11px] tw-text-slate-500 tw-mt-0.5">+ Perumahan, SMA, SMP, Pabrik, Bank, Tambak, Telkom, PDAM, Pembangkit</div>
+                                </div>
+                            </div>
+                            <div class="tw-flex tw-items-start tw-gap-3 tw-bg-sky-400/[0.03] tw-rounded-lg tw-p-3 tw-border tw-border-sky-400/[0.06] tw-border-l-[3px] tw-border-l-yellow-500/70">
+                                <span class="tw-shrink-0 tw-w-6 tw-h-6 tw-rounded-full tw-bg-yellow-500/20 tw-text-yellow-400 tw-text-[11px] tw-font-bold tw-flex tw-items-center tw-justify-center">4</span>
+                                <div>
+                                    <div class="tw-text-xs tw-font-semibold tw-text-sky-200">Kota Maju <span class="tw-font-normal tw-text-slate-600">— 800 penduduk</span></div>
+                                    <div class="tw-text-[11px] tw-text-slate-500 tw-mt-0.5">+ Apartemen, Universitas, RS, Mall, Pabrik Besar, Hotel, Stasiun, Taman Besar</div>
+                                </div>
+                            </div>
+                            <div class="tw-flex tw-items-start tw-gap-3 tw-bg-sky-400/[0.03] tw-rounded-lg tw-p-3 tw-border tw-border-sky-400/[0.06] tw-border-l-[3px] tw-border-l-purple-500/70">
+                                <span class="tw-shrink-0 tw-w-6 tw-h-6 tw-rounded-full tw-bg-purple-500/20 tw-text-purple-400 tw-text-[11px] tw-font-bold tw-flex tw-items-center tw-justify-center">5</span>
+                                <div>
+                                    <div class="tw-text-xs tw-font-semibold tw-text-sky-200">Kota Metropolitan <span class="tw-font-normal tw-text-slate-600">— 1500 penduduk</span></div>
+                                    <div class="tw-text-[11px] tw-text-slate-500 tw-mt-0.5">+ Gedung Pencakar Langit, Stadion, Bandara, Jalan Tol — 🎉 Transformasi sempurna!</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="tw-border-sky-400/10">
+
+                    <!-- Tips -->
+                    <div>
+                        <h3 class="tw-text-sm tw-font-semibold tw-text-sky-300 tw-mb-3">💡 Tips Strategi</h3>
+                        <div class="tw-space-y-1.5">
+                            <div class="tw-flex tw-items-start tw-gap-2.5 tw-bg-emerald-400/[0.04] tw-border tw-border-emerald-400/10 tw-rounded-lg tw-px-3 tw-py-2">
+                                <span class="tw-shrink-0 tw-w-5 tw-h-5 tw-rounded-full tw-bg-emerald-500/15 tw-text-emerald-400 tw-text-[10px] tw-font-bold tw-flex tw-items-center tw-justify-center tw-mt-0.5">1</span>
+                                <p class="tw-text-xs tw-text-slate-400 tw-leading-relaxed"><b class="tw-text-emerald-300/90">Utamakan pangan!</b> Bangun sawah & ladang dulu.</p>
+                            </div>
+                            <div class="tw-flex tw-items-start tw-gap-2.5 tw-bg-emerald-400/[0.04] tw-border tw-border-emerald-400/10 tw-rounded-lg tw-px-3 tw-py-2">
+                                <span class="tw-shrink-0 tw-w-5 tw-h-5 tw-rounded-full tw-bg-emerald-500/15 tw-text-emerald-400 tw-text-[10px] tw-font-bold tw-flex tw-items-center tw-justify-center tw-mt-0.5">2</span>
+                                <p class="tw-text-xs tw-text-slate-400 tw-leading-relaxed"><b class="tw-text-emerald-300/90">Bangun rumah</b> untuk naikkan batas populasi.</p>
+                            </div>
+                            <div class="tw-flex tw-items-start tw-gap-2.5 tw-bg-emerald-400/[0.04] tw-border tw-border-emerald-400/10 tw-rounded-lg tw-px-3 tw-py-2">
+                                <span class="tw-shrink-0 tw-w-5 tw-h-5 tw-rounded-full tw-bg-emerald-500/15 tw-text-emerald-400 tw-text-[10px] tw-font-bold tw-flex tw-items-center tw-justify-center tw-mt-0.5">3</span>
+                                <p class="tw-text-xs tw-text-slate-400 tw-leading-relaxed"><b class="tw-text-emerald-300/90">Jaga kebahagiaan &gt;40%</b> — masjid, taman, pasar, mall.</p>
+                            </div>
+                            <div class="tw-flex tw-items-start tw-gap-2.5 tw-bg-emerald-400/[0.04] tw-border tw-border-emerald-400/10 tw-rounded-lg tw-px-3 tw-py-2">
+                                <span class="tw-shrink-0 tw-w-5 tw-h-5 tw-rounded-full tw-bg-emerald-500/15 tw-text-emerald-400 tw-text-[10px] tw-font-bold tw-flex tw-items-center tw-justify-center tw-mt-0.5">4</span>
+                                <p class="tw-text-xs tw-text-slate-400 tw-leading-relaxed"><b class="tw-text-emerald-300/90">Sekolah & puskesmas</b> di tahap 2 = bonus +50%!</p>
+                            </div>
+                            <div class="tw-flex tw-items-start tw-gap-2.5 tw-bg-emerald-400/[0.04] tw-border tw-border-emerald-400/10 tw-rounded-lg tw-px-3 tw-py-2">
+                                <span class="tw-shrink-0 tw-w-5 tw-h-5 tw-rounded-full tw-bg-emerald-500/15 tw-text-emerald-400 tw-text-[10px] tw-font-bold tw-flex tw-items-center tw-justify-center tw-mt-0.5">5</span>
+                                <p class="tw-text-xs tw-text-slate-400 tw-leading-relaxed"><b class="tw-text-emerald-300/90">Waspada event!</b> Siapkan cadangan dana & pangan.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="tw-border-sky-400/10">
+
+                    <!-- Rumus -->
+                    <div>
+                        <h3 class="tw-text-sm tw-font-semibold tw-text-sky-300 tw-mb-3">📈 Rumus</h3>
+                        <div class="tw-grid tw-grid-cols-2 tw-gap-2">
+                            <div class="tw-bg-sky-400/[0.05] tw-rounded-lg tw-px-3 tw-py-2 tw-border tw-border-sky-400/[0.08]">
+                                <div class="tw-text-[10px] tw-text-slate-500 tw-mb-0.5">Pertumbuhan/bulan</div>
+                                <div class="tw-text-[11px] tw-text-sky-200 tw-font-mono">pop × happy × health × 8%</div>
+                            </div>
+                            <div class="tw-bg-sky-400/[0.05] tw-rounded-lg tw-px-3 tw-py-2 tw-border tw-border-sky-400/[0.08]">
+                                <div class="tw-text-[10px] tw-text-slate-500 tw-mb-0.5">Bonus pendidikan</div>
+                                <div class="tw-text-[11px] tw-text-sky-200 tw-font-mono">Produksi × (1 + edu/200)</div>
+                            </div>
+                            <div class="tw-bg-sky-400/[0.05] tw-rounded-lg tw-px-3 tw-py-2 tw-border tw-border-sky-400/[0.08]">
+                                <div class="tw-text-[10px] tw-text-slate-500 tw-mb-0.5">Konsumsi pangan/bln</div>
+                                <div class="tw-text-[11px] tw-text-sky-200 tw-font-mono">Populasi × 0.5</div>
+                            </div>
+                            <div class="tw-bg-sky-400/[0.05] tw-rounded-lg tw-px-3 tw-py-2 tw-border tw-border-sky-400/[0.08]">
+                                <div class="tw-text-[10px] tw-text-slate-500 tw-mb-0.5">Pajak tahunan</div>
+                                <div class="tw-text-[11px] tw-text-sky-200 tw-font-mono">Populasi × Rp 100</div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/data.js"></script>
+    <script src="js/renderer.js"></script>
+    <script src="js/simulation.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

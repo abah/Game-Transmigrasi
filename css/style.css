@@ -967,20 +967,20 @@ body {
 }
 
 /* ===== RESPONSIVE ===== */
-@media (max-width: 1200px) {
+@media (min-width: 1025px) and (max-width: 1200px) {
     .resource-group { gap: 8px; }
     .resource { padding: 3px 8px; }
     .res-label { display: none; }
     #side-panel { width: 220px; }
 }
 
-@media (max-width: 900px) {
+@media (min-width: 1025px) and (max-width: 900px) {
     .status-group { display: none; }
     #side-panel { width: 200px; }
 }
 
-/* ===== MOBILE (≤768px) ===== */
-@media (max-width: 768px) {
+/* ===== MOBILE (≤1024px — covers iPhone landscape 932px & iPad portrait) ===== */
+@media (max-width: 1024px) {
 
     /* Top bar: smaller, single row, compact */
     #top-bar {
@@ -1043,26 +1043,27 @@ body {
 
     /* Side panel: bottom sheet */
     #side-panel {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
+        position: fixed !important;
+        top: auto !important;        /* Reset desktop top: 52px */
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
         width: 100% !important;
-        height: 55vh;
-        max-height: 55vh;
+        height: 60vh !important;
+        max-height: 60vh !important;
         border-radius: 18px 18px 0 0;
         border-top: 2px solid rgba(148, 163, 184, 0.25);
-        border-right: none;
-        border-left: none;
-        transform: translateY(100%);
-        transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-        z-index: 50;
+        border-right: none !important;
+        border-left: none !important;
+        transform: translateY(105%) !important;    /* 105% ensures full hide on all devices */
+        transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1) !important;
+        z-index: 200 !important;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        padding-bottom: 24px;
+        padding-bottom: max(24px, env(safe-area-inset-bottom));
     }
     #side-panel.mobile-open {
-        transform: translateY(0);
+        transform: translateY(0) !important;
     }
 
     /* Drag handle on bottom sheet */
@@ -1126,7 +1127,7 @@ body {
     #btn-panel-toggle.panel-open {
         background: rgba(56, 189, 248, 0.2);
         border-color: rgba(56, 189, 248, 0.7);
-        bottom: calc(55vh + 12px);
+        bottom: calc(60vh + 12px);
     }
 
     /* Help button: repositioned */

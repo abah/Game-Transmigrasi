@@ -24,7 +24,7 @@ const PWA = {
         const ua = navigator.userAgent;
         this._isIOS = /iphone|ipad|ipod/i.test(ua);
         this._isAndroid = /android/i.test(ua);
-        this._isMobile = this._isIOS || this._isAndroid || window.innerWidth <= 768;
+        this._isMobile = this._isIOS || this._isAndroid || window.innerWidth <= 1024;
         this._isStandalone =
             window.navigator.standalone === true ||
             window.matchMedia('(display-mode: standalone)').matches ||

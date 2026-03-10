@@ -416,7 +416,7 @@ function initMobileUI() {
     const toggleLabel = document.getElementById('btn-panel-label');
     if (!panel || !toggleBtn) return;
 
-    const isMobile = () => window.innerWidth <= 768;
+    const isMobile = () => window.innerWidth <= 1024;
 
     function openPanel() {
         panel.classList.add('mobile-open');

@@ -85,7 +85,7 @@ const Renderer = {
     },
 
     resize() {
-        const isMobile = window.innerWidth <= 768;
+        const isMobile = window.innerWidth <= 1024;
         const sp = document.getElementById('side-panel');
         // On mobile, side panel is a bottom sheet → canvas takes full width
         const panelW = isMobile ? 0 : (sp ? sp.offsetWidth : 260);

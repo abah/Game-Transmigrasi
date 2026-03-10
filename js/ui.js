@@ -48,7 +48,7 @@ const UI = {
             infra: document.getElementById('build-infra')
         };
 
-        const isMobile = () => window.innerWidth <= 768;
+        const isMobile = () => window.innerWidth <= 1024;
 
         for (let key in GameData.BUILDINGS) {
             const bData = GameData.BUILDINGS[key];

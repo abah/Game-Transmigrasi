@@ -124,144 +124,122 @@ const PWA = {
         }, { passive: false });
     },
 
-    // ── Install prompt — disabled (not shown to user) ────────
+    // ── Capture Android install prompt silently ──────────────
     _setupInstallPrompt() {
-        // Silently capture the Android install prompt in case we need it later,
-        // but do NOT show any banner or overlay.
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
-            this._deferredPrompt = e; // saved for potential future use
+            this._deferredPrompt = e;
         });
     },
 
-    _showAndroidInstallBanner() {
-        if (!this._deferredPrompt) return;
-        if (localStorage.getItem('pwa-install-dismissed')) return;
+    // ── Fullscreen gate: shown every session until in fullscreen/standalone ──
+    _setupFullscreen() {
+        if (!this._isMobile) return;
+        if (this._isStandalone) return; // already running as installed app
 
-        const banner = document.createElement('div');
-        banner.id = 'pwa-install-banner';
-        banner.innerHTML = `
-            <div class="pwa-banner-icon">🏘️</div>
-            <div class="pwa-banner-text">
-                <strong>Tambah ke Homescreen</strong>
-                <span>Main seperti aplikasi native!</span>
-            </div>
-            <button class="pwa-banner-install">Pasang</button>
-            <button class="pwa-banner-close" aria-label="Tutup">✕</button>
-        `;
-        document.body.appendChild(banner);
-
-        requestAnimationFrame(() => banner.classList.add('pwa-visible'));
-
-        banner.querySelector('.pwa-banner-install').addEventListener('click', async () => {
-            banner.remove();
-            this._deferredPrompt.prompt();
-            const { outcome } = await this._deferredPrompt.userChoice;
-            this._deferredPrompt = null;
-            if (outcome === 'accepted') this._vibrate([30, 50, 30]);
-        });
-
-        banner.querySelector('.pwa-banner-close').addEventListener('click', () => {
-            banner.classList.remove('pwa-visible');
-            setTimeout(() => banner.remove(), 300);
-            localStorage.setItem('pwa-install-dismissed', '1');
-        });
+        // Show the fullscreen gate after a short delay (game needs to load first)
+        setTimeout(() => this._showFullscreenGate(), 800);
     },
 
-    _showIOSFullscreenGuide() {
-        if (localStorage.getItem('ios-guide-dismissed')) return;
+    _showFullscreenGate() {
+        // Don't show if already fullscreen (Android achieved it)
+        if (document.fullscreenElement || document.webkitFullscreenElement) return;
 
         const el = document.createElement('div');
-        el.id = 'ios-fullscreen-guide';
-        el.innerHTML = `
-            <div class="ifg-backdrop"></div>
-            <div class="ifg-card">
-                <div class="ifg-icon">🏘️</div>
-                <h2 class="ifg-title">Mainkan Fullscreen<br>di iPhone!</h2>
-                <p class="ifg-sub">Safari tidak bisa fullscreen.<br>Simpan ke Home Screen untuk pengalaman<br>seperti app native — tanpa browser bar!</p>
+        el.id = 'fs-gate';
 
-                <div class="ifg-steps">
-                    <div class="ifg-step">
-                        <span class="ifg-step-num">1</span>
-                        <span class="ifg-step-text">Tap ikon <strong>⬆️ Share</strong> di toolbar Safari bawah</span>
-                    </div>
-                    <div class="ifg-step">
-                        <span class="ifg-step-num">2</span>
-                        <span class="ifg-step-text">Pilih <strong>"Add to Home Screen"</strong></span>
-                    </div>
-                    <div class="ifg-step">
-                        <span class="ifg-step-num">3</span>
-                        <span class="ifg-step-text">Tap <strong>"Add"</strong> — selesai! 🎉</span>
-                    </div>
+        if (this._isAndroid) {
+            el.innerHTML = `
+                <div class="fsg-bg"></div>
+                <div class="fsg-card">
+                    <div class="fsg-icon">🏘️</div>
+                    <h2 class="fsg-title">Transmigrasi:<br>Membangun Negeri</h2>
+                    <p class="fsg-sub">Untuk pengalaman terbaik,<br>mainkan dalam mode <strong>layar penuh</strong></p>
+                    <button class="fsg-btn-main" id="fsg-btn-fs">
+                        ⛶ &nbsp;Mainkan Fullscreen
+                    </button>
+                    <button class="fsg-btn-skip" id="fsg-btn-skip">Lanjutkan biasa</button>
                 </div>
+            `;
+            document.body.appendChild(el);
+            requestAnimationFrame(() => el.classList.add('fsg-visible'));
 
-                <div class="ifg-benefits">
-                    <span>✅ Fullscreen</span>
-                    <span>✅ Tanpa browser bar</span>
-                    <span>✅ Ikon di homescreen</span>
-                    <span>✅ Load lebih cepat</span>
+            el.querySelector('#fsg-btn-fs').addEventListener('click', () => {
+                const rq = document.documentElement.requestFullscreen ||
+                           document.documentElement.webkitRequestFullscreen;
+                if (rq) {
+                    rq.call(document.documentElement).then(() => {
+                        el.classList.remove('fsg-visible');
+                        setTimeout(() => el.remove(), 400);
+                        // Re-enter fullscreen automatically if user exits
+                        this._watchFullscreenAndroid();
+                    }).catch(() => {
+                        el.classList.remove('fsg-visible');
+                        setTimeout(() => el.remove(), 400);
+                    });
+                } else {
+                    el.classList.remove('fsg-visible');
+                    setTimeout(() => el.remove(), 400);
+                }
+            });
+
+            el.querySelector('#fsg-btn-skip').addEventListener('click', () => {
+                el.classList.remove('fsg-visible');
+                setTimeout(() => el.remove(), 400);
+            });
+
+        } else if (this._isIOS) {
+            // iOS: Add to Home Screen is the ONLY way — show guide every session
+            el.innerHTML = `
+                <div class="fsg-bg"></div>
+                <div class="fsg-card">
+                    <div class="fsg-icon">🏘️</div>
+                    <h2 class="fsg-title">Mainkan Seperti<br>App iPhone!</h2>
+                    <p class="fsg-sub">Untuk menyembunyikan browser bar,<br>simpan game ke <strong>Home Screen</strong> dulu</p>
+                    <div class="fsg-steps">
+                        <div class="fsg-step">
+                            <span class="fsg-num">1</span>
+                            <span>Tap <strong>⬆️ Share</strong> di toolbar bawah Safari</span>
+                        </div>
+                        <div class="fsg-step">
+                            <span class="fsg-num">2</span>
+                            <span>Pilih <strong>"Add to Home Screen"</strong></span>
+                        </div>
+                        <div class="fsg-step">
+                            <span class="fsg-num">3</span>
+                            <span>Tap <strong>"Add"</strong>, lalu buka dari ikon di homescreen</span>
+                        </div>
+                    </div>
+                    <div class="fsg-arrow">
+                        <span>Tap ⬆️ Share sekarang</span>
+                        <span class="fsg-bounce">↓</span>
+                    </div>
+                    <button class="fsg-btn-skip" id="fsg-btn-skip">Mainkan di Safari (ada browser bar)</button>
                 </div>
+            `;
+            document.body.appendChild(el);
+            requestAnimationFrame(() => el.classList.add('fsg-visible'));
 
-                <div class="ifg-arrow-hint">
-                    <span class="ifg-arrow-text">Tap ⬆️ Share di bawah</span>
-                    <span class="ifg-bounce">↓</span>
-                </div>
-
-                <button class="ifg-btn-later">Lanjutkan di browser saja</button>
-            </div>
-        `;
-        document.body.appendChild(el);
-
-        requestAnimationFrame(() => el.classList.add('ifg-visible'));
-
-        el.querySelector('.ifg-btn-later').addEventListener('click', () => {
-            el.classList.remove('ifg-visible');
-            setTimeout(() => el.remove(), 400);
-            localStorage.setItem('ios-guide-dismissed', '1');
-        });
+            el.querySelector('#fsg-btn-skip').addEventListener('click', () => {
+                el.classList.remove('fsg-visible');
+                setTimeout(() => el.remove(), 400);
+            });
+        }
     },
 
-    // Keep old method as fallback alias
-    _showIOSInstallTip() { this._showIOSFullscreenGuide(); },
-
-    // ── Fullscreen (hide browser chrome) ────────────────────
-    _setupFullscreen() {
-        if (!this._isMobile || this._isStandalone) return;
-
-        // iOS Safari does NOT support Fullscreen API at all.
-        // The ONLY way to get fullscreen on iOS is "Add to Home Screen" (PWA).
-        // We show the install tip for iOS in _setupInstallPrompt().
-        if (this._isIOS) return;
-
-        const requestFS = () => {
-            const el = document.documentElement;
-            const rq = el.requestFullscreen ||
-                       el.webkitRequestFullscreen ||
-                       el.mozRequestFullScreen ||
-                       el.msRequestFullscreen;
-            if (!rq) return;
-            rq.call(el).catch(() => {
-                // Fullscreen rejected (e.g. user dismissed) — try again on next interaction
-            });
-        };
-
-        // Fire on FIRST touch anywhere on the page (not just canvas)
-        const onFirstTouch = () => {
-            requestFS();
-        };
-        document.addEventListener('touchstart', onFirstTouch, { once: true, passive: true });
-        document.addEventListener('click',      onFirstTouch, { once: true });
-
-        // Re-request fullscreen if user swipes up browser chrome back
-        const onFSChange = () => {
+    _watchFullscreenAndroid() {
+        const reEnter = () => {
             const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-            if (!isFS && this._isMobile && !this._isStandalone) {
-                // Wait for next user interaction to re-request (browser requires gesture)
-                document.addEventListener('touchstart', requestFS, { once: true, passive: true });
+            if (!isFS && this._isAndroid && !this._isStandalone) {
+                document.addEventListener('touchstart', () => {
+                    const rq = document.documentElement.requestFullscreen ||
+                               document.documentElement.webkitRequestFullscreen;
+                    if (rq) rq.call(document.documentElement).catch(() => {});
+                }, { once: true, passive: true });
             }
         };
-        document.addEventListener('fullscreenchange', onFSChange);
-        document.addEventListener('webkitfullscreenchange', onFSChange);
+        document.addEventListener('fullscreenchange', reEnter);
+        document.addEventListener('webkitfullscreenchange', reEnter);
     },
 
     // ── Online/offline notification ──────────────────────────

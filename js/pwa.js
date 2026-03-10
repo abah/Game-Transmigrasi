@@ -136,13 +136,14 @@ const PWA = {
             setTimeout(() => this._showAndroidInstallBanner(), 4000);
         });
 
-        // iOS: show instructions immediately (after loading) since fullscreen API doesn't exist on iOS
+        // iOS Safari: fullscreen is IMPOSSIBLE without Add to Home Screen.
+        // Show a prominent full-screen guide overlay.
         if (this._isIOS && !this._isStandalone) {
             const isSafari = /safari/i.test(navigator.userAgent) &&
                              !/chrome|crios|fxios/i.test(navigator.userAgent);
             if (isSafari) {
-                // Show after 2s - faster than before, iOS NEEDS this for fullscreen
-                setTimeout(() => this._showIOSInstallTip(), 2000);
+                // Show immediately after game loads (1s delay so game is visible)
+                setTimeout(() => this._showIOSFullscreenGuide(), 1000);
             }
         }
     },
@@ -181,42 +182,61 @@ const PWA = {
         });
     },
 
-    _showIOSInstallTip() {
-        if (localStorage.getItem('ios-tip-dismissed')) return;
+    _showIOSFullscreenGuide() {
+        if (localStorage.getItem('ios-guide-dismissed')) return;
 
-        const tip = document.createElement('div');
-        tip.id = 'ios-install-tip';
-        tip.innerHTML = `
-            <div class="ios-tip-handle"></div>
-            <div class="ios-tip-body">
-                <span class="ios-tip-icon">🏘️</span>
-                <div class="ios-tip-text">
-                    <strong>Untuk fullscreen di iPhone</strong>
-                    <p>Tap <strong>⬆️ Share</strong> di bawah Safari,<br>lalu pilih <strong>"Add to Home Screen"</strong></p>
-                    <p class="ios-tip-sub">✅ Fullscreen &nbsp;✅ Tanpa address bar &nbsp;✅ Seperti app</p>
+        const el = document.createElement('div');
+        el.id = 'ios-fullscreen-guide';
+        el.innerHTML = `
+            <div class="ifg-backdrop"></div>
+            <div class="ifg-card">
+                <div class="ifg-icon">🏘️</div>
+                <h2 class="ifg-title">Mainkan Fullscreen<br>di iPhone!</h2>
+                <p class="ifg-sub">Safari tidak bisa fullscreen.<br>Simpan ke Home Screen untuk pengalaman<br>seperti app native — tanpa browser bar!</p>
+
+                <div class="ifg-steps">
+                    <div class="ifg-step">
+                        <span class="ifg-step-num">1</span>
+                        <span class="ifg-step-text">Tap ikon <strong>⬆️ Share</strong> di toolbar Safari bawah</span>
+                    </div>
+                    <div class="ifg-step">
+                        <span class="ifg-step-num">2</span>
+                        <span class="ifg-step-text">Pilih <strong>"Add to Home Screen"</strong></span>
+                    </div>
+                    <div class="ifg-step">
+                        <span class="ifg-step-num">3</span>
+                        <span class="ifg-step-text">Tap <strong>"Add"</strong> — selesai! 🎉</span>
+                    </div>
                 </div>
+
+                <div class="ifg-benefits">
+                    <span>✅ Fullscreen</span>
+                    <span>✅ Tanpa browser bar</span>
+                    <span>✅ Ikon di homescreen</span>
+                    <span>✅ Load lebih cepat</span>
+                </div>
+
+                <div class="ifg-arrow-hint">
+                    <span class="ifg-arrow-text">Tap ⬆️ Share di bawah</span>
+                    <span class="ifg-bounce">↓</span>
+                </div>
+
+                <button class="ifg-btn-later">Lanjutkan di browser saja</button>
             </div>
-            <div class="ios-tip-arrow">▼</div>
-            <button class="ios-tip-close">Nanti saja</button>
         `;
-        document.body.appendChild(tip);
+        document.body.appendChild(el);
 
-        requestAnimationFrame(() => tip.classList.add('ios-tip-visible'));
+        requestAnimationFrame(() => el.classList.add('ifg-visible'));
 
-        tip.querySelector('.ios-tip-close').addEventListener('click', () => {
-            tip.classList.remove('ios-tip-visible');
-            setTimeout(() => tip.remove(), 350);
-            localStorage.setItem('ios-tip-dismissed', '1');
+        el.querySelector('.ifg-btn-later').addEventListener('click', () => {
+            el.classList.remove('ifg-visible');
+            setTimeout(() => el.remove(), 400);
+            localStorage.setItem('ios-guide-dismissed', '1');
         });
-
-        // Auto-dismiss after 12 seconds
-        setTimeout(() => {
-            if (tip.parentNode) {
-                tip.classList.remove('ios-tip-visible');
-                setTimeout(() => tip.remove(), 350);
-            }
-        }, 12000);
     },
+
+    // Keep old method as fallback alias
+    _showIOSInstallTip() { this._showIOSFullscreenGuide(); },
 
     // ── Fullscreen (hide browser chrome) ────────────────────
     _setupFullscreen() {

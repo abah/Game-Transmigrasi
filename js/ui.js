@@ -48,6 +48,8 @@ const UI = {
             infra: document.getElementById('build-infra')
         };
 
+        const isMobile = () => window.innerWidth <= 768;
+
         for (let key in GameData.BUILDINGS) {
             const bData = GameData.BUILDINGS[key];
             const container = categories[bData.category];
@@ -65,20 +67,44 @@ const UI = {
                 <span class="build-icon">${bData.icon}</span>
                 <span class="build-name">${bData.name}</span>
                 <span class="build-cost">${costText.join(' ')}</span>
+                <button class="build-info-btn" aria-label="Info ${bData.name}" title="Info">ℹ️</button>
             `;
 
-            item.addEventListener('click', (e) => {
-                if (item.classList.contains('disabled')) {
-                    // Show tooltip with requirements when clicking disabled item
+            const infoBtn = item.querySelector('.build-info-btn');
+
+            // ── Info button: always opens info sheet (mobile) or tooltip (desktop) ──
+            infoBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // prevent triggering item click
+                if (isMobile()) {
+                    this.showMobileBuildInfo(bData, key);
+                } else {
                     this.showBuildTooltip(e, bData);
-                    // Auto-hide after 4 seconds
                     clearTimeout(this._tooltipTimer);
                     this._tooltipTimer = setTimeout(() => {
                         document.getElementById('building-tooltip').style.display = 'none';
                     }, 4000);
+                }
+            });
+
+            // ── Main card click ───────────────────────────────────────────
+            item.addEventListener('click', (e) => {
+                // Ignore if info btn was clicked
+                if (e.target.classList.contains('build-info-btn')) return;
+
+                if (item.classList.contains('disabled')) {
+                    if (isMobile()) {
+                        // On mobile: open info sheet to explain why locked
+                        this.showMobileBuildInfo(bData, key);
+                    } else {
+                        this.showBuildTooltip(e, bData);
+                        clearTimeout(this._tooltipTimer);
+                        this._tooltipTimer = setTimeout(() => {
+                            document.getElementById('building-tooltip').style.display = 'none';
+                        }, 4000);
+                    }
                     return;
                 }
-                
+
                 // Toggle selection
                 if (Game.selectedBuilding === key) {
                     Game.selectedBuilding = null;
@@ -92,18 +118,146 @@ const UI = {
                 }
             });
 
-            // Hover tooltip
+            // ── Hover tooltip: desktop only ───────────────────────────────
             item.addEventListener('mouseenter', (e) => {
-                this.showBuildTooltip(e, bData);
+                if (!isMobile()) this.showBuildTooltip(e, bData);
             });
             item.addEventListener('mouseleave', () => {
-                document.getElementById('building-tooltip').style.display = 'none';
+                if (!isMobile()) document.getElementById('building-tooltip').style.display = 'none';
             });
 
             container.appendChild(item);
         }
 
         this.updateBuildButtons();
+    },
+
+    // ===== MOBILE BUILD INFO SHEET =====
+    showMobileBuildInfo(bData, key) {
+        // Remove any existing sheet
+        const existing = document.getElementById('mobile-build-info');
+        if (existing) existing.remove();
+
+        const res = Game.resources;
+        const stageUnlocked = bData.unlockStage <= Simulation.currentStage;
+        const canAffordDana = !bData.cost.dana || res.dana >= bData.cost.dana;
+        const canAffordMaterial = !bData.cost.material || res.material >= bData.cost.material;
+        const isAvailable = stageUnlocked && canAffordDana && canAffordMaterial;
+        const isDisabled = !isAvailable;
+
+        // Cost
+        const costParts = [];
+        if (bData.cost.dana) {
+            const ok = res.dana >= bData.cost.dana;
+            costParts.push(`<span class="mbi-cost-item ${ok ? 'ok' : 'bad'}">💰 Rp ${bData.cost.dana.toLocaleString('id-ID')}${ok ? '' : ' ✗'}</span>`);
+        }
+        if (bData.cost.material) {
+            const ok = res.material >= bData.cost.material;
+            costParts.push(`<span class="mbi-cost-item ${ok ? 'ok' : 'bad'}">🧱 ${bData.cost.material} unit${ok ? '' : ' ✗'}</span>`);
+        }
+
+        // Effects
+        let effectsHTML = '';
+        for (let k in bData.production) {
+            if (bData.production[k]) {
+                const label = k === 'dana' ? '💰 Pendapatan' : k === 'pangan' ? '🌾 Pangan' : '🧱 Material';
+                const val = k === 'dana' ? 'Rp ' + bData.production[k].toLocaleString('id-ID') : bData.production[k];
+                effectsHTML += `<span class="mbi-effect positive">+${val}/bln ${label}</span>`;
+            }
+        }
+        for (let k in bData.effects) {
+            if (bData.effects[k]) {
+                const labels = { maxPopulasi: '👥 Kapasitas', happiness: '😊 Kebahagiaan', education: '📚 Pendidikan', health: '❤️ Kesehatan' };
+                effectsHTML += `<span class="mbi-effect positive">+${bData.effects[k]} ${labels[k] || k}</span>`;
+            }
+        }
+
+        // Requirements (if locked)
+        let reqHTML = '';
+        if (!stageUnlocked) {
+            const reqStage = GameData.STAGES[bData.unlockStage];
+            reqHTML += `<div class="mbi-req locked">🔒 Butuh tahap: <strong>${reqStage.name}</strong> (populasi ≥ ${reqStage.minPopulation})</div>`;
+        }
+        if (!canAffordDana) {
+            reqHTML += `<div class="mbi-req locked">💰 Dana kurang Rp ${(bData.cost.dana - res.dana).toLocaleString('id-ID')}</div>`;
+        }
+        if (!canAffordMaterial) {
+            reqHTML += `<div class="mbi-req locked">🧱 Material kurang ${bData.cost.material - res.material} unit</div>`;
+        }
+
+        const sheet = document.createElement('div');
+        sheet.id = 'mobile-build-info';
+        sheet.innerHTML = `
+            <div class="mbi-backdrop"></div>
+            <div class="mbi-sheet">
+                <div class="mbi-handle"></div>
+                <div class="mbi-header">
+                    <span class="mbi-icon">${bData.icon}</span>
+                    <div class="mbi-title-group">
+                        <h3 class="mbi-name">${bData.name}</h3>
+                        <p class="mbi-desc">${bData.desc}</p>
+                    </div>
+                    <button class="mbi-close" aria-label="Tutup">✕</button>
+                </div>
+                <div class="mbi-cost-row">${costParts.join('')}</div>
+                ${effectsHTML ? `<div class="mbi-effects">${effectsHTML}</div>` : ''}
+                ${reqHTML ? `<div class="mbi-reqs">${reqHTML}</div>` : ''}
+                <div class="mbi-actions">
+                    ${isAvailable
+                        ? `<button class="mbi-btn-select" data-key="${key}">✅ Pilih & Bangun</button>`
+                        : `<button class="mbi-btn-locked" disabled>🔒 Belum Tersedia</button>`
+                    }
+                </div>
+            </div>
+        `;
+        document.body.appendChild(sheet);
+
+        // Animate in
+        requestAnimationFrame(() => sheet.querySelector('.mbi-sheet').classList.add('mbi-open'));
+
+        const close = () => {
+            const s = sheet.querySelector('.mbi-sheet');
+            s.classList.remove('mbi-open');
+            s.addEventListener('transitionend', () => sheet.remove(), { once: true });
+        };
+
+        sheet.querySelector('.mbi-close').addEventListener('click', close);
+        sheet.querySelector('.mbi-backdrop').addEventListener('click', close);
+
+        // "Pilih & Bangun" button
+        const selectBtn = sheet.querySelector('.mbi-btn-select');
+        if (selectBtn) {
+            selectBtn.addEventListener('click', () => {
+                const k = selectBtn.dataset.key;
+                Game.selectedBuilding = k;
+                document.querySelectorAll('.build-item').forEach(i => i.classList.remove('active'));
+                const activeItem = document.querySelector(`.build-item[data-building-id="${k}"]`);
+                if (activeItem) activeItem.classList.add('active');
+                document.getElementById('game-canvas').classList.add('placing');
+                close();
+                // Also close the bottom sheet panel so canvas is visible
+                const panel = document.getElementById('side-panel');
+                if (panel) {
+                    panel.classList.remove('mobile-open');
+                    const toggleBtn = document.getElementById('btn-panel-toggle');
+                    if (toggleBtn) {
+                        toggleBtn.classList.remove('panel-open');
+                        const icon = document.getElementById('btn-panel-icon');
+                        const label = document.getElementById('btn-panel-label');
+                        if (icon) icon.textContent = '🏗️';
+                        if (label) label.textContent = 'Bangun';
+                    }
+                }
+            });
+        }
+
+        // Swipe down to close
+        let startY = 0;
+        const s = sheet.querySelector('.mbi-sheet');
+        s.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
+        s.addEventListener('touchend', e => {
+            if (e.changedTouches[0].clientY - startY > 60) close();
+        }, { passive: true });
     },
 
     showBuildTooltip(e, bData) {

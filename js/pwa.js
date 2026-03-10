@@ -136,12 +136,13 @@ const PWA = {
             setTimeout(() => this._showAndroidInstallBanner(), 4000);
         });
 
-        // iOS: show instructions after 5 seconds if in Safari
+        // iOS: show instructions immediately (after loading) since fullscreen API doesn't exist on iOS
         if (this._isIOS && !this._isStandalone) {
             const isSafari = /safari/i.test(navigator.userAgent) &&
                              !/chrome|crios|fxios/i.test(navigator.userAgent);
             if (isSafari) {
-                setTimeout(() => this._showIOSInstallTip(), 5000);
+                // Show after 2s - faster than before, iOS NEEDS this for fullscreen
+                setTimeout(() => this._showIOSInstallTip(), 2000);
             }
         }
     },
@@ -190,9 +191,9 @@ const PWA = {
             <div class="ios-tip-body">
                 <span class="ios-tip-icon">🏘️</span>
                 <div class="ios-tip-text">
-                    <strong>Tambah ke Home Screen</strong>
-                    <p>Tap <strong>⬆️ Share</strong> lalu pilih<br><strong>"Add to Home Screen"</strong></p>
-                    <p class="ios-tip-sub">Game akan terbuka seperti app iPhone!</p>
+                    <strong>Untuk fullscreen di iPhone</strong>
+                    <p>Tap <strong>⬆️ Share</strong> di bawah Safari,<br>lalu pilih <strong>"Add to Home Screen"</strong></p>
+                    <p class="ios-tip-sub">✅ Fullscreen &nbsp;✅ Tanpa address bar &nbsp;✅ Seperti app</p>
                 </div>
             </div>
             <div class="ios-tip-arrow">▼</div>
@@ -221,25 +222,40 @@ const PWA = {
     _setupFullscreen() {
         if (!this._isMobile || this._isStandalone) return;
 
-        // Request fullscreen on first canvas tap
+        // iOS Safari does NOT support Fullscreen API at all.
+        // The ONLY way to get fullscreen on iOS is "Add to Home Screen" (PWA).
+        // We show the install tip for iOS in _setupInstallPrompt().
+        if (this._isIOS) return;
+
         const requestFS = () => {
             const el = document.documentElement;
-            const rq = el.requestFullscreen || el.webkitRequestFullscreen ||
-                       el.mozRequestFullScreen || el.msRequestFullscreen;
-            if (rq) rq.call(el).catch(() => {});
+            const rq = el.requestFullscreen ||
+                       el.webkitRequestFullscreen ||
+                       el.mozRequestFullScreen ||
+                       el.msRequestFullscreen;
+            if (!rq) return;
+            rq.call(el).catch(() => {
+                // Fullscreen rejected (e.g. user dismissed) — try again on next interaction
+            });
         };
 
-        const canvas = document.getElementById('game-canvas');
-        if (canvas) {
-            canvas.addEventListener('touchstart', requestFS, { once: true });
-        }
+        // Fire on FIRST touch anywhere on the page (not just canvas)
+        const onFirstTouch = () => {
+            requestFS();
+        };
+        document.addEventListener('touchstart', onFirstTouch, { once: true, passive: true });
+        document.addEventListener('click',      onFirstTouch, { once: true });
 
-        // Re-request fullscreen if user exits it accidentally
-        document.addEventListener('fullscreenchange', () => {
-            if (!document.fullscreenElement && this._isMobile && !this._isStandalone) {
-                setTimeout(requestFS, 2000);
+        // Re-request fullscreen if user swipes up browser chrome back
+        const onFSChange = () => {
+            const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (!isFS && this._isMobile && !this._isStandalone) {
+                // Wait for next user interaction to re-request (browser requires gesture)
+                document.addEventListener('touchstart', requestFS, { once: true, passive: true });
             }
-        });
+        };
+        document.addEventListener('fullscreenchange', onFSChange);
+        document.addEventListener('webkitfullscreenchange', onFSChange);
     },
 
     // ── Online/offline notification ──────────────────────────

@@ -15,7 +15,8 @@ const GameData = {
         WATER: 2,
         DIRT: 3,
         ROAD: 4,
-        FARMLAND: 5
+        FARMLAND: 5,
+        BRIDGE: 6
     },
 
     // Tile colors
@@ -26,6 +27,7 @@ const GameData = {
         3: { top: '#a08060', left: '#907050', right: '#806040' },          // Dirt
         4: { top: '#808890', left: '#707880', right: '#606870' },          // Road
         5: { top: '#7aae3b', left: '#6a9e2b', right: '#5a8e1b' },          // Farmland
+        6: { top: '#909098', left: '#808088', right: '#707078' },          // Bridge
     },
 
     // ===== INITIAL RESOURCES =====
@@ -556,7 +558,10 @@ const GameData = {
             effects: { happiness: 2 },
             production: {},
             unlockStage: 1,
-            requiresTile: 2 // water
+            isTile: true,
+            tileType: 6, // BRIDGE
+            hasCustomRender: true,
+            requiresTile: [2, 6] // water or existing bridge
         },
         pembangkit: {
             id: 'pembangkit',

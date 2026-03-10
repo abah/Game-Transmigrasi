@@ -259,7 +259,8 @@ const Game = {
 
                 // Check if tile requires specific terrain
                 if (bData.requiresTile !== undefined) {
-                    if (tileType !== bData.requiresTile) return false;
+                    const allowed = Array.isArray(bData.requiresTile) ? bData.requiresTile : [bData.requiresTile];
+                    if (!allowed.includes(tileType)) return false;
                 } else {
                     // Can't build on water (unless it's a bridge)
                     if (tileType === GameData.TILE.WATER) return false;
@@ -381,15 +382,19 @@ const Game = {
         const dt = Math.min((timestamp - this.lastTime) / 1000, 0.1);
         this.lastTime = timestamp;
 
-        // Update simulation
-        Simulation.update(dt, this.speed);
+        try {
+            // Update simulation
+            Simulation.update(dt, this.speed);
 
-        // Update people
-        const popRatio = Math.floor(this.resources.populasi / 5);
-        Renderer.spawnPeople(popRatio);
+            // Update people
+            const popRatio = Math.floor(this.resources.populasi / 5);
+            Renderer.spawnPeople(popRatio);
 
-        // Render
-        Renderer.render(dt);
+            // Render
+            Renderer.render(dt);
+        } catch (err) {
+            console.error('[GameLoop Error]', err);
+        }
 
         requestAnimationFrame((t) => this.gameLoop(t));
     }

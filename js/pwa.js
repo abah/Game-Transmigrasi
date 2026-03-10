@@ -34,15 +34,21 @@ const PWA = {
             window.matchMedia('(display-mode: standalone)').matches ||
             window.matchMedia('(display-mode: fullscreen)').matches;
 
+        // Capacitor native app — already fullscreen, no browser chrome at all
+        this._isCapacitor = !!(window.Capacitor && window.Capacitor.isNativePlatform &&
+                                window.Capacitor.isNativePlatform());
+
         document.documentElement.classList.toggle('is-ios', this._isIOS);
         document.documentElement.classList.toggle('is-android', this._isAndroid);
         document.documentElement.classList.toggle('is-mobile', this._isMobile);
         document.documentElement.classList.toggle('is-standalone', this._isStandalone);
+        document.documentElement.classList.toggle('is-capacitor', this._isCapacitor);
     },
 
     // ── Service Worker registration ──────────────────────────
     _registerSW() {
         if (!('serviceWorker' in navigator)) return;
+        if (this._isCapacitor) return; // native app uses bundled assets, no SW needed
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/sw.js')
                 .then((reg) => {
@@ -140,6 +146,7 @@ const PWA = {
     _setupFullscreen() {
         if (!this._isMobile) return;
         if (this._isStandalone) return; // already running as installed app
+        if (this._isCapacitor) return;  // native app — already fullscreen
 
         // Show the fullscreen gate after a short delay (game needs to load first)
         setTimeout(() => this._showFullscreenGate(), 800);

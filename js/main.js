@@ -290,6 +290,7 @@ const Game = {
 
         if (!this.canPlaceAt(tileX, tileY, bData)) {
             UI.notify('❌ Tidak bisa membangun di sini!', 'error');
+            if (typeof PWA !== 'undefined') PWA.vibrate([80]);
             return;
         }
 
@@ -343,6 +344,7 @@ const Game = {
 
         // Effects
         Renderer.addParticle(tileX, tileY, 'build');
+        if (typeof PWA !== 'undefined') PWA.vibrate([15, 30, 15]);
         UI.notify('🏗️ Membangun ' + bData.name + '...', 'success');
         UI.addEventLog('Pembangunan ' + bData.name + ' dimulai.', 'neutral');
         UI.updateResources();

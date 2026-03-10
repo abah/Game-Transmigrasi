@@ -124,28 +124,14 @@ const PWA = {
         }, { passive: false });
     },
 
-    // ── Install prompt (Android) + iOS instructions ──────────
+    // ── Install prompt — disabled (not shown to user) ────────
     _setupInstallPrompt() {
-        if (this._isStandalone) return; // already installed
-
-        // Android: intercept beforeinstallprompt
+        // Silently capture the Android install prompt in case we need it later,
+        // but do NOT show any banner or overlay.
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
-            this._deferredPrompt = e;
-            // Show after 4 seconds (don't interrupt loading)
-            setTimeout(() => this._showAndroidInstallBanner(), 4000);
+            this._deferredPrompt = e; // saved for potential future use
         });
-
-        // iOS Safari: fullscreen is IMPOSSIBLE without Add to Home Screen.
-        // Show a prominent full-screen guide overlay.
-        if (this._isIOS && !this._isStandalone) {
-            const isSafari = /safari/i.test(navigator.userAgent) &&
-                             !/chrome|crios|fxios/i.test(navigator.userAgent);
-            if (isSafari) {
-                // Show immediately after game loads (1s delay so game is visible)
-                setTimeout(() => this._showIOSFullscreenGuide(), 1000);
-            }
-        }
     },
 
     _showAndroidInstallBanner() {

@@ -1,0 +1,49 @@
+{
+  "name": "Transmigrasi: Membangun Negeri",
+  "short_name": "Transmigrasi",
+  "description": "Game simulasi kota berbasis browser — bangun dan kembangkan kawasan transmigrasi dari nol.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0a1628",
+  "theme_color": "#0d2244",
+  "lang": "id",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "assets/icons/favicon-16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icons/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "assets/icons/og-image.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "label": "Game Transmigrasi — tampilan utama"
+    }
+  ]
+}

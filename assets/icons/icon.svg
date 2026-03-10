@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d2a52"/>
+      <stop offset="100%" stop-color="#0a1628"/>
+    </linearGradient>
+    <linearGradient id="oground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a8a30"/>
+      <stop offset="100%" stop-color="#2a6a20"/>
+    </linearGradient>
+    <linearGradient id="bldgL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#90d0f8"/>
+      <stop offset="100%" stop-color="#60a8d8"/>
+    </linearGradient>
+    <linearGradient id="bldgR" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0%" stop-color="#2858a8"/>
+      <stop offset="100%" stop-color="#3878c0"/>
+    </linearGradient>
+    <linearGradient id="bldgT" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#60b0e8"/>
+      <stop offset="100%" stop-color="#3888c0"/>
+    </linearGradient>
+    <linearGradient id="hseL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f0e8d0"/>
+      <stop offset="100%" stop-color="#d8d0b8"/>
+    </linearGradient>
+    <linearGradient id="titleGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shad">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="80" fill="url(#bg)"/>
+  <ellipse cx="256" cy="280" rx="200" ry="160" fill="url(#glow)"/>
+
+  <polygon points="256,195 415,282 256,370 97,282" fill="url(#oground)"/>
+  <polygon points="97,282 256,370 256,392 97,304" fill="#206018"/>
+  <polygon points="415,282 256,370 256,392 415,304" fill="#186010"/>
+
+  <polygon points="97,282 415,282 415,292 97,292" fill="#506050"/>
+  <line x1="140" y1="287" x2="375" y2="287" stroke="#c8b840" stroke-width="2" stroke-dasharray="14,10"/>
+
+  <rect x="128" y="230" width="7" height="26" fill="#4a3010"/>
+  <ellipse cx="131" cy="226" rx="18" ry="13" fill="#2a7828"/>
+  <ellipse cx="131" cy="218" rx="13" ry="10" fill="#38a038"/>
+
+  <rect x="370" y="222" width="7" height="26" fill="#4a3010"/>
+  <ellipse cx="373" cy="218" rx="18" ry="13" fill="#2a7828"/>
+  <ellipse cx="373" cy="210" rx="13" ry="10" fill="#38a038"/>
+
+  <polygon points="192,162 256,132 256,248 192,278" fill="url(#bldgL)" filter="url(#shad)"/>
+  <polygon points="320,162 256,132 256,248 320,278" fill="url(#bldgR)"/>
+  <polygon points="192,162 256,132 320,162 256,192" fill="url(#bldgT)"/>
+  <rect x="198" y="172" width="11" height="15" rx="1" fill="rgba(200,240,255,0.5)"/>
+  <rect x="216" y="172" width="11" height="15" rx="1" fill="rgba(200,240,255,0.5)"/>
+  <rect x="232" y="180" width="11" height="15" rx="1" fill="rgba(200,240,255,0.45)"/>
+  <rect x="198" y="198" width="11" height="15" rx="1" fill="rgba(200,240,255,0.42)"/>
+  <rect x="216" y="198" width="11" height="15" rx="1" fill="rgba(200,240,255,0.42)"/>
+  <rect x="232" y="206" width="11" height="15" rx="1" fill="rgba(200,240,255,0.42)"/>
+  <rect x="268" y="172" width="11" height="15" rx="1" fill="rgba(80,140,200,0.42)"/>
+  <rect x="286" y="178" width="11" height="15" rx="1" fill="rgba(80,140,200,0.42)"/>
+  <rect x="268" y="198" width="11" height="15" rx="1" fill="rgba(80,140,200,0.38)"/>
+  <rect x="286" y="204" width="11" height="15" rx="1" fill="rgba(80,140,200,0.38)"/>
+
+  <polygon points="110,242 168,214 168,282 110,310" fill="url(#hseL)"/>
+  <polygon points="226,242 168,214 168,282 226,310" fill="#c8c0a8"/>
+  <polygon points="110,242 168,214 226,242 168,270" fill="#d07020"/>
+  <polygon points="136,238 168,214 200,238 168,226" fill="#b05010"/>
+  <rect x="158" y="267" width="10" height="15" rx="1" fill="#5a3010"/>
+  <rect x="120" y="258" width="9" height="9" rx="1" fill="rgba(200,240,255,0.6)"/>
+
+  <polygon points="286,258 334,234 334,294 286,318" fill="#f0e8d8"/>
+  <polygon points="382,258 334,234 334,294 382,318" fill="#d8d0c0"/>
+  <polygon points="286,258 334,234 382,258 334,282" fill="#c04030"/>
+  <rect x="294" y="272" width="9" height="10" rx="1" fill="rgba(200,240,255,0.55)"/>
+  <rect x="355" y="276" width="9" height="10" rx="1" fill="rgba(160,200,220,0.45)"/>
+  <rect x="325" y="280" width="10" height="14" rx="1" fill="#4a3020"/>
+
+  <rect x="253" y="92" width="3" height="38" fill="#c0c0c0"/>
+  <rect x="256" y="92" width="22" height="8" fill="#e82020"/>
+  <rect x="256" y="100" width="22" height="8" fill="#f8f8f8"/>
+  <circle cx="254.5" cy="92" r="4" fill="#d8a020"/>
+
+  <text x="256" y="448" font-family="Arial,sans-serif" font-size="34" font-weight="800" fill="#38bdf8" text-anchor="middle" letter-spacing="2" filter="url(#shad)">TRANSMIGRASI</text>
+  <text x="256" y="482" font-family="Arial,sans-serif" font-size="18" font-weight="500" fill="#7dd3fc" text-anchor="middle" letter-spacing="4" opacity="0.85">MEMBANGUN NEGERI</text>
+</svg>

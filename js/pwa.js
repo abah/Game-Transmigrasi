@@ -24,6 +24,10 @@ const PWA = {
         const ua = navigator.userAgent;
         this._isIOS = /iphone|ipad|ipod/i.test(ua);
         this._isAndroid = /android/i.test(ua);
+        // iOS Safari only (excludes Chrome/Firefox/Opera on iOS which have their own menus)
+        this._isIOSSafari = this._isIOS &&
+            /safari/i.test(ua) &&
+            !/CriOS|FxiOS|OPiOS|EdgiOS|mercury/i.test(ua);
         this._isMobile = this._isIOS || this._isAndroid || window.innerWidth <= 1024;
         this._isStandalone =
             window.navigator.standalone === true ||
@@ -188,8 +192,8 @@ const PWA = {
                 setTimeout(() => el.remove(), 400);
             });
 
-        } else if (this._isIOS) {
-            // iOS: Add to Home Screen is the ONLY way — show guide every session
+        } else if (this._isIOSSafari) {
+            // iOS Safari only: Add to Home Screen guide (Chrome/Firefox iOS punya menu sendiri)
             el.innerHTML = `
                 <div class="fsg-bg"></div>
                 <div class="fsg-card">

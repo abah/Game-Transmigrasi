@@ -85,9 +85,14 @@ const Renderer = {
     },
 
     resize() {
+        const isMobile = window.innerWidth <= 768;
         const sp = document.getElementById('side-panel');
-        this.canvas.width = window.innerWidth - (sp ? sp.offsetWidth : 260);
-        this.canvas.height = window.innerHeight - 52;
+        // On mobile, side panel is a bottom sheet → canvas takes full width
+        const panelW = isMobile ? 0 : (sp ? sp.offsetWidth : 260);
+        const topBar = document.getElementById('top-bar');
+        const topH = topBar ? topBar.offsetHeight : 52;
+        this.canvas.width = window.innerWidth - panelW;
+        this.canvas.height = window.innerHeight - topH;
     },
 
     // ==============================
@@ -1422,26 +1427,95 @@ const Renderer = {
             this.dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
             this.cameraStart = { x: this.camera.x, y: this.camera.y };
             this.dragDistance = 0;
+            this._pinchActive = false;
+
+            // Long-press: show tooltip after 500ms hold
+            this._longPressTimer = setTimeout(() => {
+                if (this.dragDistance < 8) {
+                    const r = this.canvas.getBoundingClientRect();
+                    const t2 = e.touches[0];
+                    const mx = t2.clientX - r.left;
+                    const my = t2.clientY - r.top;
+                    const tile = this.screenToTile(mx, my);
+                    this.hoverTile = tile;
+                    this.updateTooltip(t2.clientX, t2.clientY - 80);
+                    // Brief vibration feedback if available
+                    if (navigator.vibrate) navigator.vibrate(30);
+                }
+            }, 500);
+        } else if (e.touches.length === 2) {
+            // Pinch start
+            this._pinchActive = true;
+            this.isDragging = false;
+            if (this._longPressTimer) { clearTimeout(this._longPressTimer); this._longPressTimer = null; }
+            const dx = e.touches[1].clientX - e.touches[0].clientX;
+            const dy = e.touches[1].clientY - e.touches[0].clientY;
+            this._pinchStartDist = Math.sqrt(dx * dx + dy * dy);
+            this._pinchStartZoom = this.camera.zoom;
+            // Pinch center point in screen coords
+            this._pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            this._pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
         }
     },
     onTouchMove(e) {
         e.preventDefault();
-        if (this.isDragging && e.touches.length === 1) {
+        if (e.touches.length === 2 && this._pinchActive) {
+            // Pinch-to-zoom
+            const dx = e.touches[1].clientX - e.touches[0].clientX;
+            const dy = e.touches[1].clientY - e.touches[0].clientY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const scale = dist / (this._pinchStartDist || 1);
+            const newZoom = Math.min(3, Math.max(0.4, this._pinchStartZoom * scale));
+
+            // Zoom toward pinch center
+            const r = this.canvas.getBoundingClientRect();
+            const pcx = this._pinchCenterX - r.left;
+            const pcy = this._pinchCenterY - r.top;
+            const worldX = (pcx - this.camera.x) / this.camera.zoom;
+            const worldY = (pcy - this.camera.y) / this.camera.zoom;
+            this.camera.zoom = newZoom;
+            this.camera.x = pcx - worldX * newZoom;
+            this.camera.y = pcy - worldY * newZoom;
+
+            // Also pan with 2-finger movement
+            const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            if (this._lastPinchMidX !== undefined) {
+                this.camera.x += midX - this._lastPinchMidX;
+                this.camera.y += midY - this._lastPinchMidY;
+            }
+            this._lastPinchMidX = midX;
+            this._lastPinchMidY = midY;
+        } else if (this.isDragging && e.touches.length === 1) {
             const dx = e.touches[0].clientX - this.dragStart.x;
             const dy = e.touches[0].clientY - this.dragStart.y;
             this.dragDistance = Math.sqrt(dx * dx + dy * dy);
             this.camera.x = this.cameraStart.x + dx;
             this.camera.y = this.cameraStart.y + dy;
+            // Cancel long-press if dragged too far
+            if (this.dragDistance > 8 && this._longPressTimer) {
+                clearTimeout(this._longPressTimer);
+                this._longPressTimer = null;
+            }
         }
     },
     onTouchEnd(e) {
-        if (this.dragDistance < 10) {
-            const r = this.canvas.getBoundingClientRect();
-            const t = e.changedTouches[0];
-            const tile = this.screenToTile(t.clientX - r.left, t.clientY - r.top);
-            if (Game && Game.selectedBuilding) Game.placeBuilding(tile.x, tile.y);
+        if (this._longPressTimer) { clearTimeout(this._longPressTimer); this._longPressTimer = null; }
+        this._pinchActive = false;
+        this._lastPinchMidX = undefined;
+        this._lastPinchMidY = undefined;
+
+        if (e.touches.length === 0) {
+            if (this.dragDistance < 10 && !this._pinchActive) {
+                const r = this.canvas.getBoundingClientRect();
+                const t = e.changedTouches[0];
+                const tile = this.screenToTile(t.clientX - r.left, t.clientY - r.top);
+                if (Game && Game.selectedBuilding) {
+                    Game.placeBuilding(tile.x, tile.y);
+                }
+            }
+            this.isDragging = false;
         }
-        this.isDragging = false;
     },
     updateTooltip(mx, my) {
         const tip = document.getElementById('building-tooltip');

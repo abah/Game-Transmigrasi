@@ -403,4 +403,77 @@ const Game = {
 // ===== START =====
 window.addEventListener('DOMContentLoaded', () => {
     Game.init();
+    initMobileUI();
 });
+
+// ===== MOBILE UI =====
+function initMobileUI() {
+    const panel = document.getElementById('side-panel');
+    const toggleBtn = document.getElementById('btn-panel-toggle');
+    const toggleIcon = document.getElementById('btn-panel-icon');
+    const toggleLabel = document.getElementById('btn-panel-label');
+    if (!panel || !toggleBtn) return;
+
+    const isMobile = () => window.innerWidth <= 768;
+
+    function openPanel() {
+        panel.classList.add('mobile-open');
+        toggleBtn.classList.add('panel-open');
+        toggleIcon.textContent = '✕';
+        toggleLabel.textContent = 'Tutup';
+    }
+    function closePanel() {
+        panel.classList.remove('mobile-open');
+        toggleBtn.classList.remove('panel-open');
+        toggleIcon.textContent = '🏗️';
+        toggleLabel.textContent = 'Bangun';
+    }
+    function togglePanel() {
+        if (panel.classList.contains('mobile-open')) closePanel();
+        else openPanel();
+    }
+
+    toggleBtn.addEventListener('click', togglePanel);
+
+    // Swipe-down on panel drag handle to close
+    let sheetTouchY = 0;
+    panel.addEventListener('touchstart', e => {
+        sheetTouchY = e.touches[0].clientY;
+    }, { passive: true });
+    panel.addEventListener('touchend', e => {
+        const dy = e.changedTouches[0].clientY - sheetTouchY;
+        if (dy > 60 && isMobile()) closePanel();
+    }, { passive: true });
+
+    // Close panel when a building is selected (auto-close to show map)
+    const origSelect = Game.selectBuilding ? Game.selectBuilding.bind(Game) : null;
+    if (origSelect) {
+        Game.selectBuilding = function(id) {
+            origSelect(id);
+            if (isMobile()) setTimeout(closePanel, 200);
+        };
+    }
+
+    // Watch for build buttons to close sheet on tap
+    document.querySelectorAll('.build-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (isMobile()) setTimeout(closePanel, 300);
+        });
+    });
+
+    // Tap on canvas closes panel on mobile
+    const canvas = document.getElementById('game-canvas');
+    if (canvas) {
+        canvas.addEventListener('touchstart', () => {
+            if (isMobile() && panel.classList.contains('mobile-open')) closePanel();
+        }, { passive: true });
+    }
+
+    // Resize: re-check layout
+    window.addEventListener('resize', () => {
+        if (!isMobile()) {
+            panel.classList.remove('mobile-open');
+            toggleBtn.classList.remove('panel-open');
+        }
+    });
+}

@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="50%" stop-color="#0d2244"/>
+      <stop offset="100%" stop-color="#0a1e38"/>
+    </linearGradient>
+    <linearGradient id="grd" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a8a30"/>
+      <stop offset="100%" stop-color="#206018"/>
+    </linearGradient>
+    <linearGradient id="bldgL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#90d0f8"/>
+      <stop offset="100%" stop-color="#60a8d8"/>
+    </linearGradient>
+    <linearGradient id="bldgR" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2858a8"/>
+      <stop offset="100%" stop-color="#3878c0"/>
+    </linearGradient>
+    <linearGradient id="titleGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="55%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowR" cx="75%" cy="50%" r="35%">
+      <stop offset="0%" stop-color="#818cf8" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#818cf8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shad">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+    <filter id="glow-text">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="500" fill="url(#bg)"/>
+  <ellipse cx="400" cy="280" rx="420" ry="300" fill="url(#glow)"/>
+  <ellipse cx="780" cy="250" rx="300" ry="250" fill="url(#glowR)"/>
+
+  <!-- Stars -->
+  <circle cx="80" cy="40" r="1.5" fill="#7dd3fc" opacity="0.7"/>
+  <circle cx="180" cy="20" r="1" fill="#7dd3fc" opacity="0.5"/>
+  <circle cx="320" cy="35" r="1.5" fill="#818cf8" opacity="0.6"/>
+  <circle cx="480" cy="15" r="1" fill="#7dd3fc" opacity="0.4"/>
+  <circle cx="620" cy="30" r="1.5" fill="#7dd3fc" opacity="0.6"/>
+  <circle cx="750" cy="18" r="1" fill="#818cf8" opacity="0.5"/>
+  <circle cx="900" cy="25" r="1.5" fill="#7dd3fc" opacity="0.7"/>
+  <circle cx="960" cy="45" r="1" fill="#7dd3fc" opacity="0.4"/>
+  <circle cx="140" cy="70" r="1" fill="#818cf8" opacity="0.4"/>
+  <circle cx="840" cy="55" r="1.5" fill="#7dd3fc" opacity="0.5"/>
+
+  <!-- === ISOMETRIC SCENE (left side) === -->
+  <!-- Ground -->
+  <polygon points="120,310 480,200 480,360 120,470" fill="url(#grd)" opacity="0.9"/>
+  <polygon points="480,200 840,310 840,470 480,360" fill="#206018" opacity="0.9"/>
+  <!-- Road -->
+  <polygon points="280,270 420,218 420,240 280,292" fill="#404040" opacity="0.85"/>
+  <polygon points="420,218 560,266 560,288 420,240" fill="#383838" opacity="0.85"/>
+  <line x1="290" y1="281" x2="415" y2="229" stroke="#c8b840" stroke-width="2.5" stroke-dasharray="18,12" opacity="0.7"/>
+  <line x1="422" y1="229" x2="555" y2="277" stroke="#c8b840" stroke-width="2.5" stroke-dasharray="18,12" opacity="0.7"/>
+
+  <!-- House 1 (small, left) -->
+  <polygon points="155,285 215,255 215,320 155,350" fill="#f0e8d0" filter="url(#shad)"/>
+  <polygon points="275,285 215,255 215,320 275,350" fill="#c8c0a8"/>
+  <polygon points="155,285 215,255 275,285 215,315" fill="#d07020"/>
+  <polygon points="175,281 215,255 255,281 215,267" fill="#b05010"/>
+  <rect x="204" y="305" width="12" height="15" rx="1" fill="#5a3010"/>
+  <rect x="162" y="295" width="10" height="10" rx="1" fill="rgba(200,240,255,0.6)"/>
+
+  <!-- Main building (center-left) -->
+  <polygon points="290,175 390,130 390,280 290,325" fill="url(#bldgL)" filter="url(#shad)"/>
+  <polygon points="490,175 390,130 390,280 490,325" fill="url(#bldgR)"/>
+  <polygon points="290,175 390,130 490,175 390,220" fill="#60b0e8"/>
+  <!-- Windows left face -->
+  <rect x="300" y="185" width="14" height="18" rx="1" fill="rgba(200,240,255,0.5)"/>
+  <rect x="322" y="185" width="14" height="18" rx="1" fill="rgba(200,240,255,0.5)"/>
+  <rect x="344" y="190" width="14" height="18" rx="1" fill="rgba(200,240,255,0.45)"/>
+  <rect x="300" y="215" width="14" height="18" rx="1" fill="rgba(200,240,255,0.4)"/>
+  <rect x="322" y="215" width="14" height="18" rx="1" fill="rgba(200,240,255,0.4)"/>
+  <rect x="344" y="220" width="14" height="18" rx="1" fill="rgba(200,240,255,0.4)"/>
+  <rect x="300" y="245" width="14" height="18" rx="1" fill="rgba(200,240,255,0.35)"/>
+  <rect x="322" y="245" width="14" height="18" rx="1" fill="rgba(200,240,255,0.35)"/>
+  <!-- Windows right face -->
+  <rect x="408" y="190" width="14" height="18" rx="1" fill="rgba(80,140,200,0.45)"/>
+  <rect x="430" y="196" width="14" height="18" rx="1" fill="rgba(80,140,200,0.42)"/>
+  <rect x="452" y="202" width="14" height="18" rx="1" fill="rgba(80,140,200,0.38)"/>
+  <rect x="408" y="220" width="14" height="18" rx="1" fill="rgba(80,140,200,0.38)"/>
+  <rect x="430" y="226" width="14" height="18" rx="1" fill="rgba(80,140,200,0.35)"/>
+
+  <!-- House 2 (right) -->
+  <polygon points="510,245 570,215 570,295 510,325" fill="#f0e8d8"/>
+  <polygon points="630,245 570,215 570,295 630,325" fill="#d8d0c0"/>
+  <polygon points="510,245 570,215 630,245 570,275" fill="#c04030"/>
+  <rect x="558" y="278" width="12" height="16" rx="1" fill="#4a3020"/>
+  <rect x="518" y="258" width="10" height="10" rx="1" fill="rgba(200,240,255,0.55)"/>
+  <rect x="592" y="262" width="10" height="10" rx="1" fill="rgba(160,200,220,0.45)"/>
+
+  <!-- Trees -->
+  <rect x="148" y="230" width="7" height="30" fill="#4a3010"/>
+  <ellipse cx="151" cy="225" rx="20" ry="15" fill="#2a7828"/>
+  <ellipse cx="151" cy="215" rx="14" ry="11" fill="#38a038"/>
+  <rect x="650" y="235" width="7" height="28" fill="#4a3010"/>
+  <ellipse cx="653" cy="230" rx="18" ry="13" fill="#2a7828"/>
+  <ellipse cx="653" cy="221" rx="12" ry="10" fill="#38a038"/>
+
+  <!-- Flag -->
+  <rect x="388" y="90" width="3" height="42" fill="#c0c0c0"/>
+  <rect x="391" y="90" width="26" height="10" fill="#e82020"/>
+  <rect x="391" y="100" width="26" height="10" fill="#f8f8f8"/>
+
+  <!-- Divider line -->
+  <line x1="700" y1="60" x2="700" y2="440" stroke="rgba(56,189,248,0.12)" stroke-width="1"/>
+
+  <!-- === RIGHT SIDE: TEXT === -->
+  <!-- Label -->
+  <rect x="720" y="88" width="160" height="28" rx="14" fill="rgba(56,189,248,0.12)" stroke="rgba(56,189,248,0.3)" stroke-width="1"/>
+  <text x="800" y="107" font-family="Arial,sans-serif" font-size="13" font-weight="700" fill="#38bdf8" text-anchor="middle" letter-spacing="2">GAME SIMULASI</text>
+
+  <!-- Main Title -->
+  <text x="800" y="170" font-family="Arial Black,Arial,sans-serif" font-size="62" font-weight="900" fill="url(#titleGrad)" text-anchor="middle" filter="url(#shad)">TRANS</text>
+  <text x="800" y="240" font-family="Arial Black,Arial,sans-serif" font-size="62" font-weight="900" fill="url(#titleGrad)" text-anchor="middle" filter="url(#shad)">MIGRASI</text>
+
+  <!-- Subtitle -->
+  <text x="800" y="280" font-family="Arial,sans-serif" font-size="20" font-weight="500" fill="#7dd3fc" text-anchor="middle" letter-spacing="4" opacity="0.9">MEMBANGUN NEGERI</text>
+
+  <!-- Divider -->
+  <line x1="730" y1="298" x2="870" y2="298" stroke="rgba(56,189,248,0.25)" stroke-width="1"/>
+
+  <!-- Description -->
+  <text x="800" y="330" font-family="Arial,sans-serif" font-size="15" fill="#94a3b8" text-anchor="middle">Bangun kawasan transmigran</text>
+  <text x="800" y="352" font-family="Arial,sans-serif" font-size="15" fill="#94a3b8" text-anchor="middle">dari lahan kosong jadi kota makmur</text>
+
+  <!-- Badges -->
+  <rect x="723" y="378" width="90" height="32" rx="8" fill="rgba(52,211,153,0.12)" stroke="rgba(52,211,153,0.3)" stroke-width="1"/>
+  <text x="768" y="399" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">Gratis</text>
+
+  <rect x="823" y="378" width="90" height="32" rx="8" fill="rgba(56,189,248,0.1)" stroke="rgba(56,189,248,0.25)" stroke-width="1"/>
+  <text x="868" y="399" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#7dd3fc" text-anchor="middle">Strategi</text>
+
+  <!-- Bottom tagline -->
+  <text x="800" y="450" font-family="Arial,sans-serif" font-size="13" fill="#475569" text-anchor="middle" letter-spacing="1">gametransmigrasi.web.app</text>
+</svg>

@@ -1478,6 +1478,8 @@ const Renderer = {
     onTouchMove(e) {
         e.preventDefault();
         const dpr = this._dpr || window.devicePixelRatio || 1;
+        const r = this.canvas.getBoundingClientRect();
+
         if (e.touches.length === 2 && this._pinchActive) {
             const dx = e.touches[1].clientX - e.touches[0].clientX;
             const dy = e.touches[1].clientY - e.touches[0].clientY;
@@ -1486,7 +1488,6 @@ const Renderer = {
             const newZoom = Math.min(3, Math.max(0.4, this._pinchStartZoom * scale));
 
             // Zoom toward pinch center — convert CSS px → canvas px
-            const r = this.canvas.getBoundingClientRect();
             const pcx = (this._pinchCenterX - r.left) * dpr;
             const pcy = (this._pinchCenterY - r.top) * dpr;
             const worldX = (pcx - this.camera.x) / this.camera.zoom;
@@ -1504,15 +1505,28 @@ const Renderer = {
             }
             this._lastPinchMidX = midX;
             this._lastPinchMidY = midY;
-        } else if (this.isDragging && e.touches.length === 1) {
-            const dx = (e.touches[0].clientX - this.dragStart.x) * dpr;
-            const dy = (e.touches[0].clientY - this.dragStart.y) * dpr;
-            this.dragDistance = Math.sqrt(dx * dx + dy * dy);
-            this.camera.x = this.cameraStart.x + dx;
-            this.camera.y = this.cameraStart.y + dy;
+
+        } else if (e.touches.length === 1) {
+            const t = e.touches[0];
+            const cssDx = t.clientX - this.dragStart.x;
+            const cssDy = t.clientY - this.dragStart.y;
+            this.dragDistance = Math.sqrt(cssDx * cssDx + cssDy * cssDy);
+
             if (this.dragDistance > 8 && this._longPressTimer) {
                 clearTimeout(this._longPressTimer);
                 this._longPressTimer = null;
+            }
+
+            if (Game && Game.selectedBuilding) {
+                // Building selected: update placement preview to follow finger
+                const mx = t.clientX - r.left;
+                const my = t.clientY - r.top;
+                this.hoverTile = this.screenToTile(mx, my);
+                // Still allow small pan (don't lock camera completely)
+            } else if (this.isDragging) {
+                // No building selected: pan the map
+                this.camera.x = this.cameraStart.x + cssDx * dpr;
+                this.camera.y = this.cameraStart.y + cssDy * dpr;
             }
         }
     },
@@ -1523,14 +1537,18 @@ const Renderer = {
         this._lastPinchMidY = undefined;
 
         if (e.touches.length === 0) {
-            if (this.dragDistance < 10) {
-                const r = this.canvas.getBoundingClientRect();
-                const t = e.changedTouches[0];
-                // screenToTile handles DPR internally
-                const tile = this.screenToTile(t.clientX - r.left, t.clientY - r.top);
-                if (Game && Game.selectedBuilding) {
-                    Game.placeBuilding(tile.x, tile.y);
-                }
+            const r = this.canvas.getBoundingClientRect();
+            const t = e.changedTouches[0];
+            const tile = this.screenToTile(t.clientX - r.left, t.clientY - r.top);
+
+            if (Game && Game.selectedBuilding) {
+                // Place building at current hoverTile (updated live during touchmove)
+                // Use hoverTile if finger was dragged, else compute from lift position
+                const placeTile = this.dragDistance > 10 ? this.hoverTile : tile;
+                Game.placeBuilding(placeTile.x, placeTile.y);
+            } else if (this.dragDistance < 10) {
+                // Tap without building selected — select tile info
+                if (Game.selectTile) Game.selectTile(tile.x, tile.y);
             }
             this.isDragging = false;
         }

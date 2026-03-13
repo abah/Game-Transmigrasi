@@ -87,12 +87,23 @@ const Renderer = {
     resize() {
         const isMobile = window.innerWidth <= 1024;
         const sp = document.getElementById('side-panel');
-        // On mobile, side panel is a bottom sheet → canvas takes full width
         const panelW = isMobile ? 0 : (sp ? sp.offsetWidth : 260);
         const topBar = document.getElementById('top-bar');
         const topH = topBar ? topBar.offsetHeight : 52;
-        this.canvas.width = window.innerWidth - panelW;
-        this.canvas.height = window.innerHeight - topH;
+
+        const cssW = window.innerWidth - panelW;
+        const cssH = window.innerHeight - topH;
+
+        // Scale canvas by devicePixelRatio so rendering is crisp on Retina/HDPI screens
+        // and touch coordinates (in CSS px) map accurately to canvas pixels
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width  = cssW * dpr;
+        this.canvas.height = cssH * dpr;
+        this.canvas.style.width  = cssW + 'px';
+        this.canvas.style.height = cssH + 'px';
+
+        // Store DPR for use in coordinate conversion
+        this._dpr = dpr;
     },
 
     // ==============================
@@ -1372,8 +1383,11 @@ const Renderer = {
         return { x: (tx - ty) * this.tileWHalf, y: (tx + ty) * this.tileHHalf };
     },
     screenToTile(sx, sy) {
-        const wx = (sx - this.camera.x) / this.camera.zoom;
-        const wy = (sy - this.camera.y) / this.camera.zoom;
+        // sx/sy are in CSS pixels (from touch/mouse events).
+        // Camera and tile math work in canvas pixels, so multiply by DPR.
+        const dpr = this._dpr || window.devicePixelRatio || 1;
+        const wx = (sx * dpr - this.camera.x) / this.camera.zoom;
+        const wy = (sy * dpr - this.camera.y) / this.camera.zoom;
         return {
             x: Math.floor((wx / this.tileWHalf + wy / this.tileHHalf) / 2),
             y: Math.floor((wy / this.tileHHalf - wx / this.tileWHalf) / 2)
@@ -1396,7 +1410,9 @@ const Renderer = {
         const mx = e.clientX - r.left, my = e.clientY - r.top;
         this.hoverTile = this.screenToTile(mx, my);
         if (this.isDragging) {
-            const dx = e.clientX - this.dragStart.x, dy = e.clientY - this.dragStart.y;
+            const dpr = this._dpr || window.devicePixelRatio || 1;
+            const dx = (e.clientX - this.dragStart.x) * dpr;
+            const dy = (e.clientY - this.dragStart.y) * dpr;
             this.dragDistance = Math.sqrt(dx * dx + dy * dy);
             this.camera.x = this.cameraStart.x + dx;
             this.camera.y = this.cameraStart.y + dy;
@@ -1412,8 +1428,11 @@ const Renderer = {
     },
     onWheel(e) {
         e.preventDefault();
+        const dpr = this._dpr || window.devicePixelRatio || 1;
         const r = this.canvas.getBoundingClientRect();
-        const mx = e.clientX - r.left, my = e.clientY - r.top;
+        // Convert CSS px → canvas px for zoom center
+        const mx = (e.clientX - r.left) * dpr;
+        const my = (e.clientY - r.top) * dpr;
         const old = this.camera.zoom;
         this.camera.zoom = Math.max(0.3, Math.min(2.5, old * (e.deltaY > 0 ? 0.9 : 1.1)));
         const ratio = this.camera.zoom / old;
@@ -1422,6 +1441,7 @@ const Renderer = {
     },
     onTouchStart(e) {
         e.preventDefault();
+        const dpr = this._dpr || window.devicePixelRatio || 1;
         if (e.touches.length === 1) {
             this.isDragging = true;
             this.dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -1429,70 +1449,67 @@ const Renderer = {
             this.dragDistance = 0;
             this._pinchActive = false;
 
-            // Long-press: show tooltip after 500ms hold
             this._longPressTimer = setTimeout(() => {
                 if (this.dragDistance < 8) {
                     const r = this.canvas.getBoundingClientRect();
                     const t2 = e.touches[0];
                     const mx = t2.clientX - r.left;
                     const my = t2.clientY - r.top;
-                    const tile = this.screenToTile(mx, my);
+                    const tile = this.screenToTile(mx, my); // screenToTile already applies DPR
                     this.hoverTile = tile;
                     this.updateTooltip(t2.clientX, t2.clientY - 80);
-                    // Brief vibration feedback if available
                     if (navigator.vibrate) navigator.vibrate(30);
                 }
             }, 500);
         } else if (e.touches.length === 2) {
-            // Pinch start
             this._pinchActive = true;
             this.isDragging = false;
             if (this._longPressTimer) { clearTimeout(this._longPressTimer); this._longPressTimer = null; }
             const dx = e.touches[1].clientX - e.touches[0].clientX;
             const dy = e.touches[1].clientY - e.touches[0].clientY;
+            // Pinch distance in CSS px (ratio, so DPR cancels out)
             this._pinchStartDist = Math.sqrt(dx * dx + dy * dy);
             this._pinchStartZoom = this.camera.zoom;
-            // Pinch center point in screen coords
+            // Pinch center in CSS px (will be converted to canvas px when used)
             this._pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
             this._pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
         }
     },
     onTouchMove(e) {
         e.preventDefault();
+        const dpr = this._dpr || window.devicePixelRatio || 1;
         if (e.touches.length === 2 && this._pinchActive) {
-            // Pinch-to-zoom
             const dx = e.touches[1].clientX - e.touches[0].clientX;
             const dy = e.touches[1].clientY - e.touches[0].clientY;
             const dist = Math.sqrt(dx * dx + dy * dy);
             const scale = dist / (this._pinchStartDist || 1);
             const newZoom = Math.min(3, Math.max(0.4, this._pinchStartZoom * scale));
 
-            // Zoom toward pinch center
+            // Zoom toward pinch center — convert CSS px → canvas px
             const r = this.canvas.getBoundingClientRect();
-            const pcx = this._pinchCenterX - r.left;
-            const pcy = this._pinchCenterY - r.top;
+            const pcx = (this._pinchCenterX - r.left) * dpr;
+            const pcy = (this._pinchCenterY - r.top) * dpr;
             const worldX = (pcx - this.camera.x) / this.camera.zoom;
             const worldY = (pcy - this.camera.y) / this.camera.zoom;
             this.camera.zoom = newZoom;
             this.camera.x = pcx - worldX * newZoom;
             this.camera.y = pcy - worldY * newZoom;
 
-            // Also pan with 2-finger movement
+            // Pan with 2-finger movement — delta in CSS px → canvas px
             const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
             const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
             if (this._lastPinchMidX !== undefined) {
-                this.camera.x += midX - this._lastPinchMidX;
-                this.camera.y += midY - this._lastPinchMidY;
+                this.camera.x += (midX - this._lastPinchMidX) * dpr;
+                this.camera.y += (midY - this._lastPinchMidY) * dpr;
             }
             this._lastPinchMidX = midX;
             this._lastPinchMidY = midY;
         } else if (this.isDragging && e.touches.length === 1) {
-            const dx = e.touches[0].clientX - this.dragStart.x;
-            const dy = e.touches[0].clientY - this.dragStart.y;
+            const dx = (e.touches[0].clientX - this.dragStart.x) * dpr;
+            const dy = (e.touches[0].clientY - this.dragStart.y) * dpr;
             this.dragDistance = Math.sqrt(dx * dx + dy * dy);
             this.camera.x = this.cameraStart.x + dx;
             this.camera.y = this.cameraStart.y + dy;
-            // Cancel long-press if dragged too far
             if (this.dragDistance > 8 && this._longPressTimer) {
                 clearTimeout(this._longPressTimer);
                 this._longPressTimer = null;
@@ -1506,9 +1523,10 @@ const Renderer = {
         this._lastPinchMidY = undefined;
 
         if (e.touches.length === 0) {
-            if (this.dragDistance < 10 && !this._pinchActive) {
+            if (this.dragDistance < 10) {
                 const r = this.canvas.getBoundingClientRect();
                 const t = e.changedTouches[0];
+                // screenToTile handles DPR internally
                 const tile = this.screenToTile(t.clientX - r.left, t.clientY - r.top);
                 if (Game && Game.selectedBuilding) {
                     Game.placeBuilding(tile.x, tile.y);

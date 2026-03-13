@@ -9,8 +9,18 @@
       ".git/**",
       ".gitignore",
       "node_modules/**",
+      "android/**",
+      "ios/**",
+      "www/**",
+      "package.json",
+      "package-lock.json",
+      "capacitor.config.json",
       "README.md",
-      "*.log"
+      "*.log",
+      "**/*.sh",
+      "**/*.bat",
+      "**/*.exe",
+      "**/*.cmd"
     ],
     "headers": [
       {

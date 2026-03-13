@@ -48,11 +48,12 @@ const Renderer = {
         this.resize();
         window.addEventListener('resize', () => this.resize());
 
-        // Camera center on map
+        // Camera center on map — use CSS pixel dimensions
         const cx = GameData.MAP_SIZE / 2, cy = GameData.MAP_SIZE / 2;
         const sc = this.tileToScreen(cx, cy);
-        this.camera.x = -sc.x + this.canvas.width / 2;
-        this.camera.y = -sc.y + this.canvas.height / 2;
+        const dpr = this._dpr || 1;
+        this.camera.x = -sc.x + (this._cssW || this.canvas.width / dpr) / 2;
+        this.camera.y = -sc.y + (this._cssH || this.canvas.height / dpr) / 2;
 
         // Input
         this.canvas.addEventListener('mousedown', e => this.onMouseDown(e));
@@ -94,16 +95,19 @@ const Renderer = {
         const cssW = window.innerWidth - panelW;
         const cssH = window.innerHeight - topH;
 
-        // Scale canvas by devicePixelRatio so rendering is crisp on Retina/HDPI screens
-        // and touch coordinates (in CSS px) map accurately to canvas pixels
+        // Scale canvas buffer by DPR for crisp Retina/HDPI rendering.
+        // All coordinates (camera, mouse, touch) stay in CSS pixels —
+        // DPR is applied only via ctx.scale() at the start of each frame.
         const dpr = window.devicePixelRatio || 1;
         this.canvas.width  = cssW * dpr;
         this.canvas.height = cssH * dpr;
         this.canvas.style.width  = cssW + 'px';
         this.canvas.style.height = cssH + 'px';
-
-        // Store DPR for use in coordinate conversion
         this._dpr = dpr;
+
+        // CSS pixel dimensions used by all coordinate math
+        this._cssW = cssW;
+        this._cssH = cssH;
     },
 
     // ==============================
@@ -1383,11 +1387,9 @@ const Renderer = {
         return { x: (tx - ty) * this.tileWHalf, y: (tx + ty) * this.tileHHalf };
     },
     screenToTile(sx, sy) {
-        // sx/sy are in CSS pixels (from touch/mouse events).
-        // Camera and tile math work in canvas pixels, so multiply by DPR.
-        const dpr = this._dpr || window.devicePixelRatio || 1;
-        const wx = (sx * dpr - this.camera.x) / this.camera.zoom;
-        const wy = (sy * dpr - this.camera.y) / this.camera.zoom;
+        // sx/sy are CSS pixels. Camera is also in CSS pixels (DPR handled by ctx.scale).
+        const wx = (sx - this.camera.x) / this.camera.zoom;
+        const wy = (sy - this.camera.y) / this.camera.zoom;
         return {
             x: Math.floor((wx / this.tileWHalf + wy / this.tileHHalf) / 2),
             y: Math.floor((wy / this.tileHHalf - wx / this.tileWHalf) / 2)
@@ -1410,9 +1412,8 @@ const Renderer = {
         const mx = e.clientX - r.left, my = e.clientY - r.top;
         this.hoverTile = this.screenToTile(mx, my);
         if (this.isDragging) {
-            const dpr = this._dpr || window.devicePixelRatio || 1;
-            const dx = (e.clientX - this.dragStart.x) * dpr;
-            const dy = (e.clientY - this.dragStart.y) * dpr;
+            const dx = e.clientX - this.dragStart.x;
+            const dy = e.clientY - this.dragStart.y;
             this.dragDistance = Math.sqrt(dx * dx + dy * dy);
             this.camera.x = this.cameraStart.x + dx;
             this.camera.y = this.cameraStart.y + dy;
@@ -1428,11 +1429,9 @@ const Renderer = {
     },
     onWheel(e) {
         e.preventDefault();
-        const dpr = this._dpr || window.devicePixelRatio || 1;
         const r = this.canvas.getBoundingClientRect();
-        // Convert CSS px → canvas px for zoom center
-        const mx = (e.clientX - r.left) * dpr;
-        const my = (e.clientY - r.top) * dpr;
+        const mx = e.clientX - r.left;
+        const my = e.clientY - r.top;
         const old = this.camera.zoom;
         this.camera.zoom = Math.max(0.3, Math.min(2.5, old * (e.deltaY > 0 ? 0.9 : 1.1)));
         const ratio = this.camera.zoom / old;
@@ -1477,7 +1476,6 @@ const Renderer = {
     },
     onTouchMove(e) {
         e.preventDefault();
-        const dpr = this._dpr || window.devicePixelRatio || 1;
         const r = this.canvas.getBoundingClientRect();
 
         if (e.touches.length === 2 && this._pinchActive) {
@@ -1487,30 +1485,30 @@ const Renderer = {
             const scale = dist / (this._pinchStartDist || 1);
             const newZoom = Math.min(3, Math.max(0.4, this._pinchStartZoom * scale));
 
-            // Zoom toward pinch center — convert CSS px → canvas px
-            const pcx = (this._pinchCenterX - r.left) * dpr;
-            const pcy = (this._pinchCenterY - r.top) * dpr;
+            // Zoom toward pinch center (CSS px — same space as camera)
+            const pcx = this._pinchCenterX - r.left;
+            const pcy = this._pinchCenterY - r.top;
             const worldX = (pcx - this.camera.x) / this.camera.zoom;
             const worldY = (pcy - this.camera.y) / this.camera.zoom;
             this.camera.zoom = newZoom;
             this.camera.x = pcx - worldX * newZoom;
             this.camera.y = pcy - worldY * newZoom;
 
-            // Pan with 2-finger movement — delta in CSS px → canvas px
+            // Pan with 2-finger movement
             const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
             const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
             if (this._lastPinchMidX !== undefined) {
-                this.camera.x += (midX - this._lastPinchMidX) * dpr;
-                this.camera.y += (midY - this._lastPinchMidY) * dpr;
+                this.camera.x += midX - this._lastPinchMidX;
+                this.camera.y += midY - this._lastPinchMidY;
             }
             this._lastPinchMidX = midX;
             this._lastPinchMidY = midY;
 
         } else if (e.touches.length === 1) {
             const t = e.touches[0];
-            const cssDx = t.clientX - this.dragStart.x;
-            const cssDy = t.clientY - this.dragStart.y;
-            this.dragDistance = Math.sqrt(cssDx * cssDx + cssDy * cssDy);
+            const dx = t.clientX - this.dragStart.x;
+            const dy = t.clientY - this.dragStart.y;
+            this.dragDistance = Math.sqrt(dx * dx + dy * dy);
 
             if (this.dragDistance > 8 && this._longPressTimer) {
                 clearTimeout(this._longPressTimer);
@@ -1518,15 +1516,12 @@ const Renderer = {
             }
 
             if (Game && Game.selectedBuilding) {
-                // Building selected: update placement preview to follow finger
-                const mx = t.clientX - r.left;
-                const my = t.clientY - r.top;
-                this.hoverTile = this.screenToTile(mx, my);
-                // Still allow small pan (don't lock camera completely)
+                // Building selected: preview follows finger
+                this.hoverTile = this.screenToTile(t.clientX - r.left, t.clientY - r.top);
             } else if (this.isDragging) {
-                // No building selected: pan the map
-                this.camera.x = this.cameraStart.x + cssDx * dpr;
-                this.camera.y = this.cameraStart.y + cssDy * dpr;
+                // No building selected: pan map
+                this.camera.x = this.cameraStart.x + dx;
+                this.camera.y = this.cameraStart.y + dy;
             }
         }
     },
@@ -11084,11 +11079,17 @@ const Renderer = {
     // ==============================
     render(dt) {
         this.animTime += dt;
-        // Cap animTime to avoid floating-point precision loss after long sessions
-        // 6283 ≈ 1000 * 2π, so all sin/cos animations remain seamless
         if (this.animTime > 6283) this.animTime -= 6283;
         const ctx = this.ctx;
-        const w = this.canvas.width, h = this.canvas.height;
+        const dpr = this._dpr || window.devicePixelRatio || 1;
+
+        // Scale once per frame: all drawing coords stay in CSS pixels,
+        // DPR only boosts pixel density for crisp Retina/HDPI output.
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // Use CSS dimensions for all geometry
+        const w = this._cssW || this.canvas.width / dpr;
+        const h = this._cssH || this.canvas.height / dpr;
 
         // Sky gradient (warm & bright)
         const sky = ctx.createLinearGradient(0, 0, 0, h);

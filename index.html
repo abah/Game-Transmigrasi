@@ -44,7 +44,7 @@
     <meta name="twitter:description" content="Game simulasi kota — bangun pemukiman, pertanian, sekolah, rumah sakit, dan infrastruktur. Kembangkan kawasan transmigrasi dari nol!">
     <meta name="twitter:image" content="https://gametransmigrasi.web.app/assets/icons/og-image.png">
 
-    <link rel="stylesheet" href="css/style.css?v=3">
+    <link rel="stylesheet" href="css/style.css?v=4">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -206,6 +206,23 @@
             <p id="tooltip-desc"></p>
             <div id="tooltip-stats"></div>
             <div id="tooltip-requirements"></div>
+        </div>
+
+        <!-- Tile Action Popup (tap existing building) -->
+        <div id="tile-action-popup" style="display:none;">
+            <div class="tap-popup-inner">
+                <button id="tap-popup-close" class="tap-popup-close" aria-label="Tutup">✕</button>
+                <div class="tap-popup-icon" id="tap-popup-icon">🏠</div>
+                <div class="tap-popup-name" id="tap-popup-name">Nama Bangunan</div>
+                <div class="tap-popup-status" id="tap-popup-status"></div>
+                <div class="tap-popup-stats" id="tap-popup-stats"></div>
+                <div class="tap-popup-actions">
+                    <button id="tap-popup-demolish" class="tap-popup-btn demolish">
+                        🔨 Bongkar
+                    </button>
+                </div>
+                <p class="tap-popup-refund" id="tap-popup-refund"></p>
+            </div>
         </div>
 
         <!-- Notification Area -->
@@ -404,11 +421,11 @@
         </div>
     </div>
 
-    <script src="js/data.js?v=3"></script>
-    <script src="js/renderer.js?v=3"></script>
-    <script src="js/simulation.js?v=3"></script>
-    <script src="js/ui.js?v=3"></script>
-    <script src="js/main.js?v=3"></script>
-    <script src="js/pwa.js?v=3"></script>
+    <script src="js/data.js?v=4"></script>
+    <script src="js/renderer.js?v=4"></script>
+    <script src="js/simulation.js?v=4"></script>
+    <script src="js/ui.js?v=4"></script>
+    <script src="js/main.js?v=4"></script>
+    <script src="js/pwa.js?v=4"></script>
 </body>
 </html>

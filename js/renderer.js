@@ -11047,7 +11047,7 @@ const Renderer = {
                 x: scr.x, y: scr.y - 10,
                 vx: (Math.random() - 0.5) * 3, vy: -Math.random() * 3 - 1,
                 life: 1, decay: 0.012 + Math.random() * 0.008,
-                color: type === 'build' ? '#7eb8e0' : type === 'positive' ? '#5ab87a' : '#e08080',
+                color: type === 'build' ? '#7eb8e0' : type === 'demolish' ? '#e09060' : type === 'positive' ? '#5ab87a' : '#e08080',
                 size: 2 + Math.random() * 3
             });
         }

@@ -355,12 +355,119 @@ const Game = {
     },
 
     selectTile(tileX, tileY) {
-        // Deselect building mode
+        // Deselect building mode first
         if (this.selectedBuilding) {
             this.selectedBuilding = null;
             document.querySelectorAll('.build-item').forEach(i => i.classList.remove('active'));
             document.getElementById('game-canvas').classList.remove('placing');
+            return;
         }
+
+        // Check if tile has a building
+        const size = GameData.MAP_SIZE;
+        if (tileX < 0 || tileY < 0 || tileX >= size || tileY >= size) return;
+
+        const entry = this.map.buildings[tileY * size + tileX];
+        if (!entry || !entry.id) return;
+
+        const bData = GameData.BUILDINGS[entry.id];
+        if (!bData) return;
+
+        // Don't show popup for tiles (roads, bridges)
+        if (bData.isTile) return;
+
+        this._showTileActionPopup(entry.originX, entry.originY, bData, entry);
+    },
+
+    _showTileActionPopup(originX, originY, bData, entry) {
+        const popup = document.getElementById('tile-action-popup');
+        if (!popup) return;
+
+        document.getElementById('tap-popup-icon').textContent = bData.icon || '🏠';
+        document.getElementById('tap-popup-name').textContent = bData.name;
+
+        const statusEl = document.getElementById('tap-popup-status');
+        if (entry.buildTime > 0) {
+            statusEl.textContent = `🏗️ Sedang dibangun (${entry.buildTime} bulan tersisa)`;
+            statusEl.className = 'tap-popup-status under-construction';
+        } else {
+            statusEl.textContent = '✅ Beroperasi';
+            statusEl.className = 'tap-popup-status operational';
+        }
+
+        // Stats
+        const statsEl = document.getElementById('tap-popup-stats');
+        const lines = [];
+        if (bData.effects) {
+            if (bData.effects.happiness) lines.push(`😊 Kebahagiaan +${bData.effects.happiness}`);
+            if (bData.effects.education) lines.push(`📚 Pendidikan +${bData.effects.education}`);
+            if (bData.effects.health) lines.push(`❤️ Kesehatan +${bData.effects.health}`);
+            if (bData.effects.maxPopulasi) lines.push(`👥 Kapasitas +${bData.effects.maxPopulasi}`);
+        }
+        if (bData.production) {
+            if (bData.production.dana) lines.push(`💰 Pendapatan ${bData.production.dana >= 0 ? '+' : ''}${bData.production.dana}/bln`);
+            if (bData.production.pangan) lines.push(`🌾 Pangan +${bData.production.pangan}/bln`);
+            if (bData.production.material) lines.push(`🧱 Material +${bData.production.material}/bln`);
+        }
+        statsEl.textContent = lines.join('  ·  ');
+
+        // Refund info (50% of cost)
+        const refundEl = document.getElementById('tap-popup-refund');
+        const refunds = [];
+        if (bData.cost.dana) refunds.push(`Rp ${Math.floor(bData.cost.dana * 0.5).toLocaleString('id-ID')}`);
+        if (bData.cost.material) refunds.push(`${Math.floor(bData.cost.material * 0.5)} material`);
+        refundEl.textContent = refunds.length ? `Pembongkaran mengembalikan 50%: ${refunds.join(', ')}` : '';
+
+        // Store target for demolish button
+        popup._targetX = originX;
+        popup._targetY = originY;
+        popup._bData = bData;
+
+        popup.style.display = 'flex';
+
+        // Close button
+        document.getElementById('tap-popup-close').onclick = () => { popup.style.display = 'none'; };
+        popup.onclick = (e) => { if (e.target === popup) popup.style.display = 'none'; };
+
+        // Demolish button
+        document.getElementById('tap-popup-demolish').onclick = () => {
+            popup.style.display = 'none';
+            this.demolishBuilding(popup._targetX, popup._targetY, popup._bData);
+        };
+    },
+
+    demolishBuilding(originX, originY, bData) {
+        const size = GameData.MAP_SIZE;
+        const s = bData.size || 1;
+
+        // Remove all tiles occupied by this building
+        for (let dy = 0; dy < s; dy++) {
+            for (let dx = 0; dx < s; dx++) {
+                const tx = originX + dx;
+                const ty = originY + dy;
+                if (tx < 0 || ty < 0 || tx >= size || ty >= size) continue;
+                this.map.buildings[ty * size + tx] = null;
+                // Restore tile to dirt (keep farmland as dirt too)
+                if (this.map.tiles[ty * size + tx] !== GameData.TILE.WATER &&
+                    this.map.tiles[ty * size + tx] !== GameData.TILE.ROAD) {
+                    this.map.tiles[ty * size + tx] = GameData.TILE.DIRT;
+                }
+            }
+        }
+
+        // Refund 50% of costs
+        if (bData.cost.dana) this.resources.dana += Math.floor(bData.cost.dana * 0.5);
+        if (bData.cost.material) this.resources.material += Math.floor(bData.cost.material * 0.5);
+
+        // Recalculate
+        this.recalculateEffects();
+        Renderer.addParticle(originX, originY, 'demolish');
+        if (typeof PWA !== 'undefined') PWA.vibrate([40, 20, 40]);
+        UI.notify(`🔨 ${bData.name} dibongkar. Dana +50% dikembalikan.`, 'neutral');
+        UI.addEventLog(`Pembongkaran ${bData.name} selesai.`, 'neutral');
+        UI.updateResources();
+        UI.updateBuildButtons();
+        UI.updateStats();
     },
 
     getBuildingList() {

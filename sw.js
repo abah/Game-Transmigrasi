@@ -3,8 +3,8 @@
 // Cache-first for assets, Network-first for HTML
 // ============================================================
 
-const CACHE_NAME = 'transmigrasi-v3';
-const ASSETS_CACHE = 'transmigrasi-assets-v3';
+const CACHE_NAME = 'transmigrasi-v4';
+const ASSETS_CACHE = 'transmigrasi-assets-v4';
 
 // Core app shell (always cache)
 const CORE_FILES = [

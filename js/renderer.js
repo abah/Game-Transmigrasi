@@ -7874,15 +7874,34 @@ const Renderer = {
         return false;
     },
 
+    _isBridge(tx, ty) {
+        const size = GameData.MAP_SIZE;
+        if (tx < 0 || ty < 0 || tx >= size || ty >= size) return false;
+        if (Game.map.tiles[ty * size + tx] === GameData.TILE.BRIDGE) return true;
+        const b = Game.map.buildings[ty * size + tx];
+        return !!(b && b.id === 'jembatan');
+    },
+
     _drawJembatan(ctx, sx, sy, p, tileX, tileY) {
-        // Check each neighbor individually for conditional arch/railing rendering
         const hasLeft  = this._hasRoadOrBridge(tileX - 1, tileY);
         const hasRight = this._hasRoadOrBridge(tileX + 1, tileY);
         const hasUp    = this._hasRoadOrBridge(tileX, tileY - 1);
         const hasDown  = this._hasRoadOrBridge(tileX, tileY + 1);
-        const leftRight = hasLeft || hasRight;
-        const upDown    = hasUp   || hasDown;
-        const isVert    = upDown && !leftRight;
+
+        // Whether each neighbor is a bridge (vs road)
+        const leftBridge  = this._isBridge(tileX - 1, tileY);
+        const rightBridge = this._isBridge(tileX + 1, tileY);
+        const upBridge    = this._isBridge(tileX, tileY - 1);
+        const downBridge  = this._isBridge(tileX, tileY + 1);
+
+        const isHoriz = hasLeft || hasRight;
+        const isVert  = hasUp   || hasDown;
+        // Default horizontal if isolated
+        const doHoriz = isHoriz || !isVert;
+        const doVert  = isVert;
+        const isCross = doHoriz && doVert;
+
+        // Fake: the old isVert flag (kept for water-only sections below that still use it)
 
         // Water underneath (animated shimmer) — full tile diamond
         const wave = Math.sin((this.animTime || 0) * 1.5 + sx * 0.1);
@@ -7907,243 +7926,212 @@ const Renderer = {
 
         const deckH = 4 * p;
 
-        if (!isVert) {
-            // === HORIZONTAL BRIDGE (grid X axis, tileX-1 ↔ tileX+1) ===
-            //
-            // In isometric, moving tileX+1 shifts screen by (+32, +16).
-            // The shared edge midpoints that MUST be deck endpoints for seamless connection:
-            //   left  connecting midpoint: (sx-16, sy-8)
-            //   right connecting midpoint: (sx+16, sy+8)
-            // Road width perpendicular (Y tile direction offset per 0.5 tile): (-8, +4)
-            //
-            // Deck corners at tile-surface level (verified: adjacent tiles share these exactly):
-            //   LL = (sx- 8, sy-12)  upper-right side, left end
-            //   LU = (sx-24, sy- 4)  lower-left  side, left end
-            //   RU = (sx+ 8, sy+12)  lower-left  side, right end  ← = adj.tile's LU
-            //   RL = (sx+24, sy+ 4)  upper-right side, right end  ← = adj.tile's LL
-            const LLx = sx -  8, LLy = sy - 12;
-            const LUx = sx - 24, LUy = sy -  4;
-            const RUx = sx +  8, RUy = sy + 12;
-            const RLx = sx + 24, RLy = sy +  4;
-            const lx = sx - 16, ly = sy - 8;   // left connecting center
-            const rx = sx + 16, ry = sy + 8;   // right connecting center
+        // ── Shared geometry constants ─────────────────────────────────────────────
+        // Horizontal strip corners (on N-W edge at t=0.25/0.75, and E-S edge at t=0.25/0.75)
+        const LLx = sx -  8, LLy = sy - 12;   // upper side, left end
+        const LUx = sx - 24, LUy = sy -  4;   // lower side, left end
+        const RUx = sx +  8, RUy = sy + 12;   // lower side, right end
+        const RLx = sx + 24, RLy = sy +  4;   // upper side, right end
+        const lx = sx - 16, ly = sy - 8;       // left edge midpoint
+        const rx = sx + 16, ry = sy + 8;       // right edge midpoint
 
-            // Stone arch / abutment — only at OPEN ends (no neighbour)
-            ctx.fillStyle = '#787068';
-            if (!hasLeft) {
-                ctx.beginPath();
-                ctx.moveTo(LUx + 4, LUy + 3);
-                ctx.quadraticCurveTo(lx - 5, ly + 10, LLx + 4, LLy + 5);
-                ctx.lineTo(LLx + 4, LLy - 1);
-                ctx.lineTo(LUx + 4, LUy - 3);
-                ctx.closePath();
-                ctx.fill();
-            }
-            if (!hasRight) {
-                ctx.beginPath();
-                ctx.moveTo(RUx - 4, RUy + 3);
-                ctx.quadraticCurveTo(rx + 5, ry + 10, RLx - 4, RLy + 5);
-                ctx.lineTo(RLx - 4, RLy - 1);
-                ctx.lineTo(RUx - 4, RUy - 3);
-                ctx.closePath();
-                ctx.fill();
-            }
+        // Vertical strip corners (on N-E edge at t=0.25/0.75, and S-W edge at t=0.25/0.75)
+        const ULx = sx +  8, ULy = sy - 12;   // upper side, up end
+        const URx = sx + 24, URy = sy -  4;   // lower side, up end
+        const DRx = sx -  8, DRy = sy + 12;   // lower side, down end
+        const DLx = sx - 24, DLy = sy +  4;   // upper side, down end
+        const ux = sx + 16, uy = sy - 8;       // up edge midpoint
+        const dx = sx - 16, dy = sy + 8;       // down edge midpoint
 
-            // Upper-right face (LL→RL side — drawn behind south face)
+        // Tile vertices (for full-diamond junction)
+        const Nx = sx,     Ny = sy - 16;
+        const Ex = sx + 32, Ey = sy;
+        const Sx = sx,     Sy = sy + 16;
+        const Wx = sx - 32, Wy = sy;
+
+        // ── Stone arches at OPEN ends (no neighbour) ─────────────────────────────
+        ctx.fillStyle = '#787068';
+        if (doHoriz && !hasLeft) {
+            ctx.beginPath();
+            ctx.moveTo(LUx + 4, LUy + 3);
+            ctx.quadraticCurveTo(lx - 5, ly + 10, LLx + 4, LLy + 5);
+            ctx.lineTo(LLx + 4, LLy - 1);
+            ctx.lineTo(LUx + 4, LUy - 3);
+            ctx.closePath(); ctx.fill();
+        }
+        if (doHoriz && !hasRight) {
+            ctx.beginPath();
+            ctx.moveTo(RUx - 4, RUy + 3);
+            ctx.quadraticCurveTo(rx + 5, ry + 10, RLx - 4, RLy + 5);
+            ctx.lineTo(RLx - 4, RLy - 1);
+            ctx.lineTo(RUx - 4, RUy - 3);
+            ctx.closePath(); ctx.fill();
+        }
+        if (doVert && !hasUp) {
+            ctx.beginPath();
+            ctx.moveTo(URx - 3, URy + 4);
+            ctx.quadraticCurveTo(ux + 10, uy + 5, ULx - 3, ULy + 5);
+            ctx.lineTo(ULx - 3, ULy - 1);
+            ctx.lineTo(URx - 3, URy - 1);
+            ctx.closePath(); ctx.fill();
+        }
+        if (doVert && !hasDown) {
+            ctx.beginPath();
+            ctx.moveTo(DRx - 3, DRy + 4);
+            ctx.quadraticCurveTo(dx + 10, dy + 5, DLx - 3, DLy + 5);
+            ctx.lineTo(DLx - 3, DLy - 1);
+            ctx.lineTo(DRx - 3, DRy - 1);
+            ctx.closePath(); ctx.fill();
+        }
+
+        // ── Deck body faces (drawn back-to-front) ────────────────────────────────
+        if (isCross) {
+            // Full diamond side faces — upper-right (NW diamond edge)
             ctx.fillStyle = '#807870';
             ctx.beginPath();
-            ctx.moveTo(LLx, LLy);
-            ctx.lineTo(RLx, RLy);
-            ctx.lineTo(RLx, RLy - deckH);
-            ctx.lineTo(LLx, LLy - deckH);
-            ctx.closePath();
-            ctx.fill();
-
-            // Lower-left face / south face (LU→RU — main visible face)
+            ctx.moveTo(Nx, Ny); ctx.lineTo(Wx, Wy);
+            ctx.lineTo(Wx, Wy - deckH); ctx.lineTo(Nx, Ny - deckH);
+            ctx.closePath(); ctx.fill();
+            // Full diamond front face — lower-left (NE diamond edge, viewer-facing)
             ctx.fillStyle = '#908880';
             ctx.beginPath();
-            ctx.moveTo(LUx, LUy);
-            ctx.lineTo(RUx, RUy);
-            ctx.lineTo(RUx, RUy - deckH);
-            ctx.lineTo(LUx, LUy - deckH);
-            ctx.closePath();
-            ctx.fill();
-
-            // Top road surface
-            ctx.fillStyle = '#606068';
+            ctx.moveTo(Nx, Ny); ctx.lineTo(Ex, Ey);
+            ctx.lineTo(Ex, Ey - deckH); ctx.lineTo(Nx, Ny - deckH);
+            ctx.closePath(); ctx.fill();
+        } else if (doHoriz) {
+            ctx.fillStyle = '#807870';
             ctx.beginPath();
-            ctx.moveTo(LLx, LLy - deckH);
-            ctx.lineTo(LUx, LUy - deckH);
-            ctx.lineTo(RUx, RUy - deckH);
-            ctx.lineTo(RLx, RLy - deckH);
-            ctx.closePath();
-            ctx.fill();
-
-            // Centre dashes
-            ctx.strokeStyle = 'rgba(220,200,100,0.5)';
-            ctx.lineWidth = 0.8;
-            ctx.setLineDash([3, 3]);
+            ctx.moveTo(LLx, LLy); ctx.lineTo(RLx, RLy);
+            ctx.lineTo(RLx, RLy - deckH); ctx.lineTo(LLx, LLy - deckH);
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#908880';
             ctx.beginPath();
-            ctx.moveTo(lx, ly - deckH);
-            ctx.lineTo(rx, ry - deckH);
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            // White edge lines
-            ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-            ctx.lineWidth = 0.5;
+            ctx.moveTo(LUx, LUy); ctx.lineTo(RUx, RUy);
+            ctx.lineTo(RUx, RUy - deckH); ctx.lineTo(LUx, LUy - deckH);
+            ctx.closePath(); ctx.fill();
+        } else { // doVert only
+            ctx.fillStyle = '#908880';
             ctx.beginPath();
-            ctx.moveTo(LLx, LLy - deckH);
-            ctx.lineTo(RLx, RLy - deckH);
-            ctx.stroke();
+            ctx.moveTo(ULx, ULy); ctx.lineTo(DLx, DLy);
+            ctx.lineTo(DLx, DLy - deckH); ctx.lineTo(ULx, ULy - deckH);
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#807870';
             ctx.beginPath();
-            ctx.moveTo(LUx, LUy - deckH);
-            ctx.lineTo(RUx, RUy - deckH);
-            ctx.stroke();
+            ctx.moveTo(URx, URy); ctx.lineTo(DRx, DRy);
+            ctx.lineTo(DRx, DRy - deckH); ctx.lineTo(URx, URy - deckH);
+            ctx.closePath(); ctx.fill();
+        }
 
-            if (p < 0.5) return;
-
-            // Railings
-            ctx.fillStyle = '#a09888';
-            ctx.strokeStyle = '#b0a898';
-            ctx.lineWidth = 1;
-            // Upper-right railing (LL→RL)
-            for (let i = 0; i < 5; i++) {
-                const t = (i + 0.5) / 5;
-                ctx.fillRect(LLx + (RLx - LLx) * t - 0.6, LLy + (RLy - LLy) * t - deckH - 5, 1.2, 5);
-            }
+        // ── Road-connection apron: blend bridge deck down to road level ───────────
+        // When a road (non-bridge) neighbour is adjacent, draw a road-coloured
+        // trapezoid from the shared tile-edge down to road level so the two surfaces
+        // merge seamlessly instead of showing an abrupt 4-pixel step.
+        ctx.fillStyle = '#707880';
+        if (doHoriz && hasLeft && !leftBridge) {
+            // Left apron: fill between road edge (N→W of this tile) and deck edge
             ctx.beginPath();
-            ctx.moveTo(LLx, LLy - deckH - 4);
-            ctx.lineTo(RLx, RLy - deckH - 4);
-            ctx.stroke();
-            // Lower-left railing (LU→RU)
-            for (let i = 0; i < 5; i++) {
-                const t = (i + 0.5) / 5;
-                ctx.fillRect(LUx + (RUx - LUx) * t - 0.6, LUy + (RUy - LUy) * t - deckH - 5, 1.2, 5);
-            }
+            ctx.moveTo(Nx, Ny - deckH); ctx.lineTo(LLx, LLy - deckH);
+            ctx.lineTo(LUx, LUy - deckH); ctx.lineTo(Wx, Wy - deckH);
+            ctx.lineTo(Wx, Wy); ctx.lineTo(Nx, Ny);
+            ctx.closePath(); ctx.fill();
+        }
+        if (doHoriz && hasRight && !rightBridge) {
             ctx.beginPath();
-            ctx.moveTo(LUx, LUy - deckH - 4);
-            ctx.lineTo(RUx, RUy - deckH - 4);
-            ctx.stroke();
+            ctx.moveTo(Ex, Ey - deckH); ctx.lineTo(RLx, RLy - deckH);
+            ctx.lineTo(RUx, RUy - deckH); ctx.lineTo(Sx, Sy - deckH);
+            ctx.lineTo(Sx, Sy); ctx.lineTo(Ex, Ey);
+            ctx.closePath(); ctx.fill();
+        }
+        if (doVert && hasUp && !upBridge) {
+            ctx.beginPath();
+            ctx.moveTo(Nx, Ny - deckH); ctx.lineTo(ULx, ULy - deckH);
+            ctx.lineTo(URx, URy - deckH); ctx.lineTo(Ex, Ey - deckH);
+            ctx.lineTo(Ex, Ey); ctx.lineTo(Nx, Ny);
+            ctx.closePath(); ctx.fill();
+        }
+        if (doVert && hasDown && !downBridge) {
+            ctx.beginPath();
+            ctx.moveTo(Wx, Wy - deckH); ctx.lineTo(DLx, DLy - deckH);
+            ctx.lineTo(DRx, DRy - deckH); ctx.lineTo(Sx, Sy - deckH);
+            ctx.lineTo(Sx, Sy); ctx.lineTo(Wx, Wy);
+            ctx.closePath(); ctx.fill();
+        }
 
+        // ── Top deck surface ─────────────────────────────────────────────────────
+        ctx.fillStyle = '#606068';
+        if (isCross) {
+            // Full tile diamond top
+            ctx.beginPath();
+            ctx.moveTo(Nx, Ny - deckH); ctx.lineTo(Ex, Ey - deckH);
+            ctx.lineTo(Sx, Sy - deckH); ctx.lineTo(Wx, Wy - deckH);
+            ctx.closePath(); ctx.fill();
+        } else if (doHoriz) {
+            ctx.beginPath();
+            ctx.moveTo(LLx, LLy - deckH); ctx.lineTo(LUx, LUy - deckH);
+            ctx.lineTo(RUx, RUy - deckH); ctx.lineTo(RLx, RLy - deckH);
+            ctx.closePath(); ctx.fill();
         } else {
-            // === VERTICAL BRIDGE (grid Y axis, tileY-1 ↔ tileY+1) ===
-            //
-            // Moving tileY+1 shifts screen by (-32, +16).
-            // Connecting midpoints:
-            //   up   connecting midpoint: (sx+16, sy-8)
-            //   down connecting midpoint: (sx-16, sy+8)
-            // Road width perpendicular (X tile direction offset per 0.5 tile): (+8, +4)
-            //
-            // Deck corners (adjacent tiles share these exactly):
-            //   UL = (sx+ 8, sy-12)  left  side, up end
-            //   UR = (sx+24, sy- 4)  right side, up end
-            //   DR = (sx- 8, sy+12)  right side, down end  ← = adj.tile's UR
-            //   DL = (sx-24, sy+ 4)  left  side, down end  ← = adj.tile's UL
-            const ULx = sx +  8, ULy = sy - 12;
-            const URx = sx + 24, URy = sy -  4;
-            const DRx = sx -  8, DRy = sy + 12;
-            const DLx = sx - 24, DLy = sy +  4;
-            const ux = sx + 16, uy = sy - 8;   // up connecting center
-            const dx = sx - 16, dy = sy + 8;   // down connecting center
-
-            // Stone arch / abutment — only at OPEN ends
-            ctx.fillStyle = '#787068';
-            if (!hasUp) {
-                ctx.beginPath();
-                ctx.moveTo(URx - 3, URy + 4);
-                ctx.quadraticCurveTo(ux + 10, uy + 5, ULx - 3, ULy + 5);
-                ctx.lineTo(ULx - 3, ULy - 1);
-                ctx.lineTo(URx - 3, URy - 1);
-                ctx.closePath();
-                ctx.fill();
-            }
-            if (!hasDown) {
-                ctx.beginPath();
-                ctx.moveTo(DRx - 3, DRy + 4);
-                ctx.quadraticCurveTo(dx + 10, dy + 5, DLx - 3, DLy + 5);
-                ctx.lineTo(DLx - 3, DLy - 1);
-                ctx.lineTo(DRx - 3, DRy - 1);
-                ctx.closePath();
-                ctx.fill();
-            }
-
-            // Left face (UL→DL side)
-            ctx.fillStyle = '#908880';
             ctx.beginPath();
-            ctx.moveTo(ULx, ULy);
-            ctx.lineTo(DLx, DLy);
-            ctx.lineTo(DLx, DLy - deckH);
-            ctx.lineTo(ULx, ULy - deckH);
-            ctx.closePath();
-            ctx.fill();
+            ctx.moveTo(ULx, ULy - deckH); ctx.lineTo(URx, URy - deckH);
+            ctx.lineTo(DRx, DRy - deckH); ctx.lineTo(DLx, DLy - deckH);
+            ctx.closePath(); ctx.fill();
+        }
 
-            // Right face (UR→DR side — main visible face)
-            ctx.fillStyle = '#807870';
+        // ── Centre dashes ─────────────────────────────────────────────────────────
+        ctx.strokeStyle = 'rgba(220,200,100,0.5)';
+        ctx.lineWidth = 0.8;
+        ctx.setLineDash([3, 3]);
+        if (doHoriz) {
             ctx.beginPath();
-            ctx.moveTo(URx, URy);
-            ctx.lineTo(DRx, DRy);
-            ctx.lineTo(DRx, DRy - deckH);
-            ctx.lineTo(URx, URy - deckH);
-            ctx.closePath();
-            ctx.fill();
-
-            // Top road surface
-            ctx.fillStyle = '#606068';
-            ctx.beginPath();
-            ctx.moveTo(ULx, ULy - deckH);
-            ctx.lineTo(URx, URy - deckH);
-            ctx.lineTo(DRx, DRy - deckH);
-            ctx.lineTo(DLx, DLy - deckH);
-            ctx.closePath();
-            ctx.fill();
-
-            // Centre dashes
-            ctx.strokeStyle = 'rgba(220,200,100,0.5)';
-            ctx.lineWidth = 0.8;
-            ctx.setLineDash([3, 3]);
-            ctx.beginPath();
-            ctx.moveTo(ux, uy - deckH);
-            ctx.lineTo(dx, dy - deckH);
+            ctx.moveTo(lx, ly - deckH); ctx.lineTo(rx, ry - deckH);
             ctx.stroke();
-            ctx.setLineDash([]);
-
-            // White edge lines
-            ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-            ctx.lineWidth = 0.5;
+        }
+        if (doVert) {
             ctx.beginPath();
-            ctx.moveTo(ULx, ULy - deckH);
-            ctx.lineTo(DLx, DLy - deckH);
+            ctx.moveTo(ux, uy - deckH); ctx.lineTo(dx, dy - deckH);
             ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(URx, URy - deckH);
-            ctx.lineTo(DRx, DRy - deckH);
-            ctx.stroke();
+        }
+        ctx.setLineDash([]);
 
-            if (p < 0.5) return;
+        // ── White edge lines ──────────────────────────────────────────────────────
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 0.5;
+        if (doHoriz) {
+            ctx.beginPath(); ctx.moveTo(LLx, LLy - deckH); ctx.lineTo(RLx, RLy - deckH); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(LUx, LUy - deckH); ctx.lineTo(RUx, RUy - deckH); ctx.stroke();
+        }
+        if (doVert) {
+            ctx.beginPath(); ctx.moveTo(ULx, ULy - deckH); ctx.lineTo(DLx, DLy - deckH); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(URx, URy - deckH); ctx.lineTo(DRx, DRy - deckH); ctx.stroke();
+        }
 
-            // Railings
-            ctx.fillStyle = '#a09888';
-            ctx.strokeStyle = '#b0a898';
-            ctx.lineWidth = 1;
-            // Left railing (UL→DL)
+        if (p < 0.5) return;
+
+        // ── Railings (only on sides with no neighbour) ───────────────────────────
+        ctx.fillStyle = '#a09888';
+        ctx.strokeStyle = '#b0a898';
+        ctx.lineWidth = 1;
+
+        const _post = (ax, ay, bx, by) => {
             for (let i = 0; i < 5; i++) {
                 const t = (i + 0.5) / 5;
-                ctx.fillRect(ULx + (DLx - ULx) * t - 0.6, ULy + (DLy - ULy) * t - deckH - 5, 1.2, 5);
+                ctx.fillRect(ax + (bx - ax) * t - 0.6, ay + (by - ay) * t - deckH - 5, 1.2, 5);
             }
-            ctx.beginPath();
-            ctx.moveTo(ULx, ULy - deckH - 4);
-            ctx.lineTo(DLx, DLy - deckH - 4);
-            ctx.stroke();
-            // Right railing (UR→DR)
-            for (let i = 0; i < 5; i++) {
-                const t = (i + 0.5) / 5;
-                ctx.fillRect(URx + (DRx - URx) * t - 0.6, URy + (DRy - URy) * t - deckH - 5, 1.2, 5);
-            }
-            ctx.beginPath();
-            ctx.moveTo(URx, URy - deckH - 4);
-            ctx.lineTo(DRx, DRy - deckH - 4);
-            ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(ax, ay - deckH - 4); ctx.lineTo(bx, by - deckH - 4); ctx.stroke();
+        };
+
+        if (isCross) {
+            // On a junction draw short rail caps only on open ends
+            if (!hasLeft)  { ctx.beginPath(); ctx.moveTo(Nx, Ny-deckH-4); ctx.lineTo(Wx, Wy-deckH-4); ctx.stroke(); }
+            if (!hasRight) { ctx.beginPath(); ctx.moveTo(Ex, Ey-deckH-4); ctx.lineTo(Sx, Sy-deckH-4); ctx.stroke(); }
+            if (!hasUp)    { ctx.beginPath(); ctx.moveTo(Nx, Ny-deckH-4); ctx.lineTo(Ex, Ey-deckH-4); ctx.stroke(); }
+            if (!hasDown)  { ctx.beginPath(); ctx.moveTo(Wx, Wy-deckH-4); ctx.lineTo(Sx, Sy-deckH-4); ctx.stroke(); }
+        } else if (doHoriz) {
+            _post(LLx, LLy, RLx, RLy);   // upper-right railing
+            _post(LUx, LUy, RUx, RUy);   // lower-left railing
+        } else {
+            _post(ULx, ULy, DLx, DLy);   // left railing
+            _post(URx, URy, DRx, DRy);   // right railing
         }
     },
 

@@ -62,7 +62,15 @@ const Renderer = {
         this.canvas.addEventListener('mouseleave', () => { this.isDragging = false; this.hoverTile = { x: -1, y: -1 }; });
         this.canvas.addEventListener('wheel', e => this.onWheel(e), { passive: false });
         this.canvas.addEventListener('click', e => this.onClick(e));
-        this.canvas.addEventListener('contextmenu', e => e.preventDefault());
+        this.canvas.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            if (Game.selectedBuilding) {
+                Game.selectedBuilding = null;
+                document.querySelectorAll('.build-item').forEach(i => i.classList.remove('active'));
+                this.canvas.classList.remove('placing');
+                this.hoverTile = null;
+            }
+        });
         this.canvas.addEventListener('touchstart', e => this.onTouchStart(e), { passive: false });
         this.canvas.addEventListener('touchmove', e => this.onTouchMove(e), { passive: false });
         this.canvas.addEventListener('touchend', e => this.onTouchEnd(e));

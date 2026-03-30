@@ -61,12 +61,13 @@ const Renderer = {
         this.resize();
         window.addEventListener('resize', () => this.resize());
 
-        // Camera center on map — use CSS pixel dimensions
+        // Camera center on map — center in the VISIBLE area (left of side panel)
         const cx = GameData.MAP_SIZE / 2, cy = GameData.MAP_SIZE / 2;
         const sc = this.tileToScreen(cx, cy);
-        const dpr = this._dpr || 1;
-        this.camera.x = -sc.x + (this._cssW || this.canvas.width / dpr) / 2;
-        this.camera.y = -sc.y + (this._cssH || this.canvas.height / dpr) / 2;
+        const visW = this._visW || this._cssW || (this.canvas.width / (this._dpr || 1));
+        const cssH = this._cssH || (this.canvas.height / (this._dpr || 1));
+        this.camera.x = -sc.x + visW / 2;
+        this.camera.y = -sc.y + cssH / 2;
 
         // Input
         this.canvas.addEventListener('mousedown', e => this.onMouseDown(e));
@@ -113,26 +114,35 @@ const Renderer = {
     resize() {
         const isMobile = window.innerWidth <= 1024;
         const sp = document.getElementById('side-panel');
-        const panelW = isMobile ? 0 : (sp ? sp.offsetWidth : 260);
         const topBar = document.getElementById('top-bar');
         const topH = topBar ? topBar.offsetHeight : 52;
 
-        const cssW = window.innerWidth - panelW;
+        // #side-panel is position:absolute (overlay), it does NOT consume flex space.
+        // Use the full viewport width for canvas dimensions so that CSS flex-grow
+        // and our internal coordinate system stay in sync.
+        // We only subtract the panel width when centering the camera so the initial
+        // view appears in the visible (non-panel) area.
+        const panelW = isMobile ? 0 : (sp ? sp.offsetWidth : 260);
+        const cssW = window.innerWidth;   // full viewport width — matches flex-grow
         const cssH = window.innerHeight - topH;
 
-        // Scale canvas buffer by DPR for crisp Retina/HDPI rendering.
-        // All coordinates (camera, mouse, touch) stay in CSS pixels —
-        // DPR is applied only via ctx.scale() at the start of each frame.
         const dpr = window.devicePixelRatio || 1;
-        this.canvas.width  = cssW * dpr;
-        this.canvas.height = cssH * dpr;
+        // Use Math.round to avoid sub-pixel canvas buffer on fractional-DPR displays
+        // (e.g. Windows 125 % scaling where dpr = 1.25).
+        this.canvas.width  = Math.round(cssW * dpr);
+        this.canvas.height = Math.round(cssH * dpr);
         this.canvas.style.width  = cssW + 'px';
         this.canvas.style.height = cssH + 'px';
+        // Prevent flex-grow from expanding the canvas beyond our explicit size.
+        this.canvas.style.flex = 'none';
         this._dpr = dpr;
 
-        // CSS pixel dimensions used by all coordinate math
+        // Store both full width and visible (non-panel) width.
+        // _cssW is the true canvas pixel width used for all coordinate math.
+        // _visW is the playable area width (for camera centering).
         this._cssW = cssW;
         this._cssH = cssH;
+        this._visW = cssW - panelW;   // visible area to the left of the side panel
     },
 
     // ==============================

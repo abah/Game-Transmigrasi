@@ -10919,20 +10919,109 @@ const Renderer = {
     // ==============================
     //  PEOPLE
     // ==============================
+    // ==============================
+    //  NPC PATHFINDING (BFS)
+    // ==============================
+    _canWalkTile(tx, ty) {
+        const size = GameData.MAP_SIZE;
+        if (tx < 0 || ty < 0 || tx >= size || ty >= size) return false;
+        const tile = Game.map.tiles[ty * size + tx];
+        if (tile === GameData.TILE.WATER) return false;
+        const b = Game.map.buildings[ty * size + tx];
+        if (b && b.id) {
+            const bd = GameData.BUILDINGS[b.id];
+            if (bd && !bd.isTile) return false; // solid building blocks path
+        }
+        return true;
+    },
+
+    // BFS from (x1,y1) to (x2,y2) avoiding buildings/water.
+    // Roads get lower cost (Dijkstra-lite) so NPCs prefer walking on roads.
+    _findPath(x1, y1, x2, y2) {
+        const size = GameData.MAP_SIZE;
+        x1 = Math.round(x1); y1 = Math.round(y1);
+        x2 = Math.round(x2); y2 = Math.round(y2);
+        if (x1 === x2 && y1 === y2) return [{x: x1, y: y1}];
+
+        const key = (x, y) => y * size + x;
+        const parent = new Int32Array(size * size).fill(-1);
+        parent[key(x1, y1)] = key(x1, y1); // sentinel: start
+
+        // Priority queue (simple array sorted by cost) — road cost=1, other=3
+        const queue = [];
+        const cost = new Uint16Array(size * size).fill(65535);
+        cost[key(x1, y1)] = 0;
+        queue.push({x: x1, y: y1, c: 0});
+
+        const DIRS = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+        const MAX_NODES = 500;
+        let visited = 0;
+
+        // Simple BFS (not full Dijkstra — tiles have only 2 costs, BFS-with-deque works)
+        let qi = 0;
+        while (qi < queue.length && visited < MAX_NODES) {
+            const {x, y, c} = queue[qi++];
+            visited++;
+
+            for (const {dx, dy} of DIRS) {
+                const nx = x + dx, ny = y + dy;
+                const nk = key(nx, ny);
+                const isGoal = (nx === x2 && ny === y2);
+
+                if (!isGoal && !this._canWalkTile(nx, ny)) continue;
+
+                const tileType = (nx >= 0 && ny >= 0 && nx < size && ny < size)
+                    ? Game.map.tiles[ny * size + nx] : -1;
+                const stepCost = (tileType === GameData.TILE.ROAD || tileType === GameData.TILE.BRIDGE) ? 1 : 3;
+                const nc = c + stepCost;
+
+                if (nc < cost[nk]) {
+                    cost[nk] = nc;
+                    parent[nk] = key(x, y);
+                    if (isGoal) { qi = queue.length; break; } // found
+                    queue.push({x: nx, y: ny, c: nc});
+                }
+            }
+        }
+
+        // Reconstruct path
+        if (parent[key(x2, y2)] < 0) return null; // unreachable
+
+        const path = [];
+        let ck = key(x2, y2);
+        const startK = key(x1, y1);
+        let safety = 0;
+        while (ck !== startK && safety++ < 200) {
+            path.unshift({x: ck % size, y: Math.floor(ck / size)});
+            ck = parent[ck];
+        }
+        path.unshift({x: x1, y: y1});
+        return path;
+    },
+
     spawnPeople(count) {
-        while (this.people.length < count && this.people.length < 150) {
+        const MAX_PEOPLE = 60;
+        while (this.people.length < count && this.people.length < MAX_PEOPLE) {
             const bldgs = Game.getBuildingList();
-            if (bldgs.length === 0) break;
+            if (bldgs.length < 2) break;
+
             const from = bldgs[Math.floor(Math.random() * bldgs.length)];
-            const to = bldgs[Math.floor(Math.random() * bldgs.length)];
+            let to;
+            let tries = 0;
+            do { to = bldgs[Math.floor(Math.random() * bldgs.length)]; } while (to === from && ++tries < 5);
+
+            const path = this._findPath(from.x, from.y, to.x, to.y);
+            if (!path || path.length < 2) break;
+
             const skinTones = ['#deb887','#c68c53','#8d5524','#f1c27d','#e0ac69'];
             const shirtColors = ['#e04050','#4080d0','#40a040','#d0a030','#8040b0','#d06030','#30a0a0'];
             this.people.push({
-                fromX: from.x, fromY: from.y, toX: to.x, toY: to.y,
-                progress: 0, speed: 0.003 + Math.random() * 0.005,
+                path, pathIdx: 0, progress: 0,
+                speed: 0.04 + Math.random() * 0.04,
                 skin: skinTones[Math.floor(Math.random() * skinTones.length)],
                 shirt: shirtColors[Math.floor(Math.random() * shirtColors.length)],
-                hat: Math.random() > 0.6
+                hat: Math.random() > 0.6,
+                dir: 1  // 1=right/down, -1=left/up (for animation mirroring)
             });
         }
     },
@@ -10941,15 +11030,36 @@ const Renderer = {
         for (let i = this.people.length - 1; i >= 0; i--) {
             const p = this.people[i];
             p.progress += p.speed;
+
             if (p.progress >= 1) {
-                const bldgs = Game.getBuildingList();
-                if (bldgs.length > 0) {
-                    const to = bldgs[Math.floor(Math.random() * bldgs.length)];
-                    p.fromX = p.toX; p.fromY = p.toY;
-                    p.toX = to.x; p.toY = to.y;
+                p.pathIdx++;
+                p.progress -= 1;
+
+                // Compute walk direction for animation
+                if (p.pathIdx < p.path.length - 1) {
+                    const cur = p.path[p.pathIdx];
+                    const nxt = p.path[p.pathIdx + 1];
+                    const dx = nxt.x - cur.x, dy = nxt.y - cur.y;
+                    p.dir = (dx + dy >= 0) ? 1 : -1;
+                }
+
+                // Reached end of path — find new destination
+                if (p.pathIdx >= p.path.length - 1) {
+                    const bldgs = Game.getBuildingList();
+                    if (bldgs.length < 2) { this.people.splice(i, 1); continue; }
+
+                    const cur = p.path[p.path.length - 1];
+                    let newPath = null;
+                    for (let t = 0; t < 4 && !newPath; t++) {
+                        const to = bldgs[Math.floor(Math.random() * bldgs.length)];
+                        const candidate = this._findPath(cur.x, cur.y, to.x, to.y);
+                        if (candidate && candidate.length >= 2) newPath = candidate;
+                    }
+                    if (!newPath) { this.people.splice(i, 1); continue; }
+
+                    p.path = newPath;
+                    p.pathIdx = 0;
                     p.progress = 0;
-                } else {
-                    this.people.splice(i, 1);
                 }
             }
         }
@@ -10958,11 +11068,14 @@ const Renderer = {
     renderPeople(ctx) {
         this.updatePeople();
         for (const p of this.people) {
-            const cx = p.fromX + (p.toX - p.fromX) * p.progress;
-            const cy = p.fromY + (p.toY - p.fromY) * p.progress;
+            const idx0 = Math.min(p.pathIdx, p.path.length - 1);
+            const idx1 = Math.min(p.pathIdx + 1, p.path.length - 1);
+            const wp0 = p.path[idx0], wp1 = p.path[idx1];
+            const cx = wp0.x + (wp1.x - wp0.x) * p.progress;
+            const cy = wp0.y + (wp1.y - wp0.y) * p.progress;
             const scr = this.tileToScreen(cx, cy);
             const sx = scr.x, sy = scr.y;
-            const walk = Math.sin(this.animTime * 10 + p.fromX * 3) * 1.5;
+            const walk = Math.sin(this.animTime * 10 + wp0.x * 3) * 1.5 * (p.dir || 1);
 
             // Shadow
             ctx.fillStyle = 'rgba(0,0,0,0.12)';

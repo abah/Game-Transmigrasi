@@ -110,11 +110,15 @@ const UI = {
                     Game.selectedBuilding = null;
                     document.querySelectorAll('.build-item').forEach(i => i.classList.remove('active'));
                     document.getElementById('game-canvas').classList.remove('placing');
+                    const cb = document.getElementById('btn-cancel-place');
+                    if (cb) cb.style.display = 'none';
                 } else {
                     Game.selectedBuilding = key;
                     document.querySelectorAll('.build-item').forEach(i => i.classList.remove('active'));
                     item.classList.add('active');
                     document.getElementById('game-canvas').classList.add('placing');
+                    const cb = document.getElementById('btn-cancel-place');
+                    if (cb) cb.style.display = 'flex';
                 }
             });
 
@@ -234,6 +238,8 @@ const UI = {
                 const activeItem = document.querySelector(`.build-item[data-building-id="${k}"]`);
                 if (activeItem) activeItem.classList.add('active');
                 document.getElementById('game-canvas').classList.add('placing');
+                const cb = document.getElementById('btn-cancel-place');
+                if (cb) cb.style.display = 'flex';
                 close();
                 // Also close the bottom sheet panel so canvas is visible
                 const panel = document.getElementById('side-panel');

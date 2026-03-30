@@ -44,7 +44,7 @@
     <meta name="twitter:description" content="Game simulasi kota — bangun pemukiman, pertanian, sekolah, rumah sakit, dan infrastruktur. Kembangkan kawasan transmigrasi dari nol!">
     <meta name="twitter:image" content="https://gametransmigrasi.web.app/assets/icons/og-image.png">
 
-    <link rel="stylesheet" href="css/style.css?v=5">
+    <link rel="stylesheet" href="css/style.css?v=6">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -148,6 +148,12 @@
 
             <!-- Help Button -->
             <button id="btn-help" title="Panduan Bermain" class="tw-absolute tw-bottom-3 tw-left-[204px] tw-w-10 tw-h-10 tw-rounded-full tw-bg-slate-900/85 tw-border-2 tw-border-sky-300/25 tw-text-sky-300 tw-text-lg tw-cursor-pointer tw-backdrop-blur-md tw-z-[15] tw-flex tw-items-center tw-justify-center tw-transition-all hover:tw-bg-sky-600/30 hover:tw-border-sky-300/50 hover:tw-scale-110">❓</button>
+
+            <!-- Cancel Placement Button (shown when building selected) -->
+            <button id="btn-cancel-place" style="display:none;" aria-label="Batalkan penempatan">
+                <span>✕</span>
+                <span>Batal <kbd>Esc</kbd></span>
+            </button>
 
             <!-- Mobile Panel Toggle (hidden on desktop via CSS) -->
             <button id="btn-panel-toggle" style="display:none;" aria-label="Buka menu bangunan">
@@ -421,11 +427,11 @@
         </div>
     </div>
 
-    <script src="js/data.js?v=5"></script>
-    <script src="js/renderer.js?v=5"></script>
-    <script src="js/simulation.js?v=5"></script>
-    <script src="js/ui.js?v=5"></script>
-    <script src="js/main.js?v=5"></script>
-    <script src="js/pwa.js?v=5"></script>
+    <script src="js/data.js?v=6"></script>
+    <script src="js/renderer.js?v=6"></script>
+    <script src="js/simulation.js?v=6"></script>
+    <script src="js/ui.js?v=6"></script>
+    <script src="js/main.js?v=6"></script>
+    <script src="js/pwa.js?v=6"></script>
 </body>
 </html>

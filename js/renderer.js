@@ -37,6 +37,19 @@ const Renderer = {
     SPRITE_ANCHOR_Y: 25,    // Diamond center Y in 100×50 isometric diamond
 
     // ==============================
+    //  CANCEL PLACEMENT
+    // ==============================
+    cancelPlacement() {
+        if (!Game.selectedBuilding) return;
+        Game.selectedBuilding = null;
+        document.querySelectorAll('.build-item').forEach(i => i.classList.remove('active'));
+        if (this.canvas) this.canvas.classList.remove('placing');
+        this.hoverTile = null;
+        const cancelBtn = document.getElementById('btn-cancel-place');
+        if (cancelBtn) cancelBtn.style.display = 'none';
+    },
+
+    // ==============================
     //  INITIALIZATION
     // ==============================
     init() {
@@ -64,13 +77,17 @@ const Renderer = {
         this.canvas.addEventListener('click', e => this.onClick(e));
         this.canvas.addEventListener('contextmenu', e => {
             e.preventDefault();
-            if (Game.selectedBuilding) {
-                Game.selectedBuilding = null;
-                document.querySelectorAll('.build-item').forEach(i => i.classList.remove('active'));
-                this.canvas.classList.remove('placing');
-                this.hoverTile = null;
-            }
+            this.cancelPlacement();
         });
+
+        // Escape key — cancel placement (Mac & Windows)
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') this.cancelPlacement();
+        });
+
+        // Cancel button shown on canvas
+        const cancelBtn = document.getElementById('btn-cancel-place');
+        if (cancelBtn) cancelBtn.addEventListener('click', () => this.cancelPlacement());
         this.canvas.addEventListener('touchstart', e => this.onTouchStart(e), { passive: false });
         this.canvas.addEventListener('touchmove', e => this.onTouchMove(e), { passive: false });
         this.canvas.addEventListener('touchend', e => this.onTouchEnd(e));

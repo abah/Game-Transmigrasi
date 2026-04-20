@@ -282,6 +282,65 @@ const Game = {
         return true;
     },
 
+    pendingPlacement: null, // { tileX, tileY, id } — mobile: shown as ghost awaiting confirm
+
+    // Returns true if we should use the 2-step (preview → confirm) flow instead
+    // of committing immediately. Enabled on touch-only devices to prevent
+    // accidental taps.
+    _useConfirmFlow() {
+        if (typeof PWA !== 'undefined' && PWA._isMobile) return true;
+        if (matchMedia('(hover: none)').matches) return true;
+        return false;
+    },
+
+    // Called from canvas tap/drag end when a building is selected.
+    // On mobile: stores pending placement + shows confirm bar (no cost deducted).
+    // On desktop: passes through to placeBuilding (original behavior).
+    requestPlacement(tileX, tileY) {
+        if (!this.selectedBuilding) return;
+        if (!this._useConfirmFlow()) {
+            this.placeBuilding(tileX, tileY);
+            return;
+        }
+
+        const bData = GameData.BUILDINGS[this.selectedBuilding];
+        if (!bData) return;
+
+        // Validate up-front so user doesn't go through confirm then fail.
+        if (!this.canPlaceAt(tileX, tileY, bData)) {
+            UI.notify('❌ Tidak bisa membangun di sini!', 'error');
+            if (typeof PWA !== 'undefined') PWA.hapticError();
+            return;
+        }
+
+        this.pendingPlacement = {
+            tileX,
+            tileY,
+            id: this.selectedBuilding,
+        };
+        // Pin the ghost preview at the chosen tile so it stays visible after
+        // the finger lifts (renderPlacementPreview reads hoverTile).
+        if (typeof Renderer !== 'undefined' && Renderer.hoverTile) {
+            Renderer.hoverTile = { x: tileX, y: tileY };
+        }
+        UI.showPlaceConfirm(bData);
+        if (typeof PWA !== 'undefined') PWA.hapticLight();
+    },
+
+    confirmPendingPlacement() {
+        if (!this.pendingPlacement) return;
+        const { tileX, tileY } = this.pendingPlacement;
+        this.pendingPlacement = null;
+        UI.hidePlaceConfirm();
+        this.placeBuilding(tileX, tileY);
+    },
+
+    cancelPendingPlacement() {
+        this.pendingPlacement = null;
+        UI.hidePlaceConfirm();
+        if (typeof PWA !== 'undefined') PWA.hapticLight();
+    },
+
     placeBuilding(tileX, tileY) {
         if (!this.selectedBuilding) return;
 

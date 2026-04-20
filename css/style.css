@@ -605,6 +605,9 @@ body {
 #intro-screen {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
+    /* Use dynamic viewport height so iOS Safari address bar doesn't clip content */
+    min-height: 100vh;
+    min-height: 100dvh;
     background: linear-gradient(135deg, #0a1628 0%, #1a2a4a 50%, #0d1f3c 100%);
     display: flex;
     align-items: safe center;
@@ -612,6 +615,8 @@ body {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     z-index: 999;
+    /* Respect iOS notch / home indicator */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 .intro-content {
@@ -1212,33 +1217,82 @@ body {
     flex-direction: column;
     gap: 6px;
     pointer-events: none;
+    max-width: 90vw;
 }
 
 .notification {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     background: rgba(15,30,54,0.9);
     border: 1px solid rgba(126,184,224,0.2);
     border-radius: 8px;
-    padding: 10px 20px;
+    padding: 10px 16px;
     font-size: 0.85rem;
     color: #a8d4f0;
     backdrop-filter: blur(10px);
-    animation: notifyIn 0.3s ease, notifyOut 0.3s ease 2.7s forwards;
+    animation: notifyIn 0.28s ease;
     white-space: nowrap;
     text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    align-self: center;
+    transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.notification .notif-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .notification.success { border-color: rgba(90,184,122,0.4); color: #7ed8a0; }
 .notification.warning { border-color: rgba(232,184,74,0.4); color: #f0d060; }
 .notification.error { border-color: rgba(196,90,90,0.4); color: #e08080; }
 
+.notification .notif-count {
+    display: inline-block;
+    min-width: 22px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(126,184,224,0.25);
+    color: #cde8ff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.notification.success .notif-count {
+    background: rgba(90,184,122,0.28);
+    color: #c7f0d6;
+}
+.notification.warning .notif-count {
+    background: rgba(232,184,74,0.28);
+    color: #fbe8a6;
+}
+.notification.error .notif-count {
+    background: rgba(196,90,90,0.28);
+    color: #f1c0c0;
+}
+
+.notification.notif-out {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+
+.notification.notif-pulse {
+    animation: notifPulse 0.3s ease;
+}
+
 @keyframes notifyIn {
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes notifyOut {
-    from { opacity: 1; }
-    to { opacity: 0; transform: translateY(-10px); }
+@keyframes notifPulse {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.06); }
+    100% { transform: scale(1); }
 }
 
 /* ===== EVENT MODAL ===== */
@@ -1618,11 +1672,32 @@ body {
 
     /* Notifications: top */
     #notifications {
-        top: 54px;
+        /* Reset desktop centering: on mobile we position via left/right */
+        top: calc(48px + env(safe-area-inset-top, 0px) + 8px);
         bottom: auto;
-        right: 8px;
         left: 8px;
+        right: 8px;
+        transform: none;          /* IMPORTANT: clear desktop translateX(-50%) */
         max-width: none;
+        align-items: center;      /* center individual pills horizontally */
+        gap: 5px;
+    }
+    .notification {
+        max-width: min(92vw, 460px);
+        padding: 8px 14px;
+        font-size: 0.8rem;
+        white-space: normal;      /* allow wrap for long messages */
+        word-break: break-word;
+        text-align: center;
+        justify-content: center;
+        line-height: 1.3;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    .notification .notif-text {
+        white-space: normal;
+    }
+    .notification .notif-count {
+        flex-shrink: 0;
     }
 
     /* Modal: full-screen on mobile */
@@ -1820,4 +1895,295 @@ body {
     font-weight: 600;
     cursor: not-allowed;
     min-height: 50px;
+}
+
+/* ===== INTRO & LOADING — MOBILE FIT-TO-SCREEN =====
+   On phones (≤768px width) we want the welcome page to feel like a native
+   app: everything visible in one screen, no scrolling needed. */
+@media (max-width: 768px) {
+    /* Loading screen compact */
+    .loading-content h1 { font-size: 2.1rem; margin-bottom: 0.15rem; }
+    .loading-content h2 { font-size: 1.1rem; margin-bottom: 1.4rem; }
+    .loading-bar-container { width: min(260px, 70vw); }
+    #loading-text { font-size: 0.82rem; }
+
+    /* Intro screen: compact fluid sizing, fits any phone viewport without scroll */
+    #intro-screen {
+        /* Short phones (iPhone SE landscape ~375) still get scroll as fallback */
+        overflow-y: auto;
+    }
+    .intro-content {
+        padding: 1rem 1.1rem;
+        width: 100%;
+        max-width: 480px;
+    }
+    .intro-content h1 {
+        font-size: clamp(1.35rem, 5.2vw, 1.9rem);
+        line-height: 1.15;
+        margin-bottom: 0.6rem;
+    }
+    .intro-desc {
+        font-size: clamp(0.82rem, 3.4vw, 0.98rem);
+        line-height: 1.5;
+        margin-bottom: 1.1rem;
+    }
+    .intro-features {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.55rem;
+        margin-bottom: 1.25rem;
+    }
+    .feature {
+        padding: 0.55rem 0.35rem;
+        min-width: 0;
+        border-radius: 10px;
+    }
+    .feature span {
+        font-size: 1.35rem;
+        margin-bottom: 0.15rem;
+    }
+    .feature p {
+        font-size: 0.7rem;
+        white-space: nowrap;
+    }
+    .btn-primary {
+        padding: 13px 36px;
+        font-size: 1rem;
+        width: 100%;
+        max-width: 320px;
+    }
+}
+
+/* Very short screens (iPhone SE portrait 568px high, landscape mode etc.) */
+@media (max-height: 640px) {
+    .intro-content { padding: 0.7rem 1rem; }
+    .intro-content h1 { font-size: 1.25rem; margin-bottom: 0.35rem; }
+    .intro-desc {
+        font-size: 0.78rem;
+        line-height: 1.35;
+        margin-bottom: 0.7rem;
+    }
+    .intro-features {
+        gap: 0.4rem;
+        margin-bottom: 0.8rem;
+    }
+    .feature { padding: 0.4rem 0.3rem; }
+    .feature span { font-size: 1.1rem; margin-bottom: 0.1rem; }
+    .feature p { font-size: 0.65rem; }
+    .btn-primary { padding: 10px 32px; font-size: 0.9rem; }
+
+    .loading-content h1 { font-size: 1.7rem; }
+    .loading-content h2 { font-size: 0.95rem; margin-bottom: 0.9rem; }
+}
+
+/* =========================================================================
+   PLACEMENT CONFIRM BAR (mobile — ghost preview before committing cost)
+   ========================================================================= */
+#place-confirm {
+    position: fixed;
+    left: 50%;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%) translateY(20px);
+    z-index: 250;
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    background: linear-gradient(180deg, rgba(15,30,54,0.96) 0%, rgba(10,22,40,0.98) 100%);
+    border: 1px solid rgba(126,184,224,0.25);
+    border-radius: 18px;
+    padding: 6px;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+    backdrop-filter: blur(14px);
+    opacity: 0;
+    transition: opacity 0.24s ease, transform 0.24s cubic-bezier(0.2,0.8,0.2,1.1);
+    max-width: calc(100vw - 24px);
+    min-width: min(320px, 90vw);
+}
+#place-confirm.pc-visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+#place-confirm .pc-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    padding: 8px 12px;
+    min-width: 0;
+}
+#place-confirm .pc-building-icon {
+    font-size: 1.8rem;
+    flex-shrink: 0;
+    line-height: 1;
+}
+#place-confirm .pc-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    flex: 1;
+}
+#place-confirm .pc-name {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #d6e9f6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#place-confirm .pc-cost {
+    font-size: 0.74rem;
+    color: #8fb6d2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#place-confirm .pc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: none;
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    min-width: 48px;
+    min-height: 48px;
+    transition: transform 0.08s ease, filter 0.08s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+#place-confirm .pc-btn .pc-ic {
+    font-size: 1.15rem;
+    line-height: 1;
+}
+#place-confirm .pc-btn:active {
+    transform: scale(0.94);
+    filter: brightness(1.12);
+}
+
+#place-confirm .pc-cancel {
+    background: rgba(196,90,90,0.18);
+    color: #e08080;
+    border: 1px solid rgba(196,90,90,0.3);
+}
+#place-confirm .pc-cancel:active {
+    background: rgba(196,90,90,0.32);
+}
+
+#place-confirm .pc-ok {
+    background: linear-gradient(180deg, #4fa970 0%, #3a8655 100%);
+    color: #fff;
+    padding: 12px 20px;
+    box-shadow: 0 3px 0 #2c6940, 0 6px 14px rgba(74,169,112,0.35);
+}
+#place-confirm .pc-ok:active {
+    box-shadow: 0 1px 0 #2c6940, 0 3px 8px rgba(74,169,112,0.35);
+    transform: translateY(1px) scale(0.97);
+}
+#place-confirm .pc-ok .pc-lbl { letter-spacing: 0.02em; }
+
+/* Small phones — compact layout */
+@media (max-width: 420px) {
+    #place-confirm {
+        min-width: min(300px, calc(100vw - 16px));
+        padding: 5px;
+        gap: 6px;
+    }
+    #place-confirm .pc-building-icon { font-size: 1.55rem; }
+    #place-confirm .pc-name { font-size: 0.82rem; }
+    #place-confirm .pc-cost { font-size: 0.7rem; }
+    #place-confirm .pc-ok { padding: 11px 16px; font-size: 0.92rem; }
+    #place-confirm .pc-ok .pc-lbl { display: none; }  /* icon-only on tiny screens */
+}
+
+/* Keep away from existing mobile controls (panel toggle button at bottom) */
+@media (max-width: 1024px) {
+    #place-confirm {
+        bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    }
+    #side-panel.mobile-open ~ #place-confirm,
+    body:has(#side-panel.mobile-open) #place-confirm {
+        /* Hide confirm bar when bottom-sheet is open (would overlap) */
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(-50%) translateY(10px);
+    }
+}
+
+/* =========================================================================
+   NATIVE-APP SCREEN TRANSITIONS (loading → intro → game)
+   Crossfade + gentle scale for polished first-time feel.
+   ========================================================================= */
+.screen-enter {
+    opacity: 0;
+    transform: scale(0.985);
+    transition: opacity 0.36s ease-out, transform 0.36s ease-out;
+    will-change: opacity, transform;
+}
+.screen-enter.screen-enter-active {
+    opacity: 1;
+    transform: scale(1);
+}
+.screen-leave {
+    animation: screenLeave 0.36s ease-in forwards;
+    will-change: opacity, transform;
+}
+@keyframes screenLeave {
+    from { opacity: 1; transform: scale(1); }
+    to   { opacity: 0; transform: scale(1.015); }
+}
+
+/* =========================================================================
+   NATIVE-APP TOUCH FEEL
+   ========================================================================= */
+
+/* On touch devices, :hover "sticks" after tap which feels laggy.
+   Neutralize hover styles that might linger, and rely on :active only. */
+@media (hover: none) {
+    .feature:hover,
+    .btn-primary:hover,
+    .btn-speed:hover,
+    .panel-tab:hover,
+    .build-item:hover,
+    #btn-help:hover,
+    #btn-cancel-place:hover,
+    .tap-popup-close:hover,
+    .tap-popup-btn.demolish:hover {
+        /* Reset hover state — use :active for mobile feedback */
+        transform: none;
+        box-shadow: none;
+    }
+}
+
+/* Universal :active feedback for tappable elements. Keyed by common classes
+   used throughout the app. Fast 80ms compression that feels instant. */
+.btn-primary:active,
+.feature:active,
+.build-item:active,
+.build-btn:active,
+.panel-tab:active,
+.btn-speed:active,
+.resource:active,
+.status-bar-item:active,
+#btn-help:active,
+#btn-cancel-place:active,
+.tap-popup-btn:active,
+.fsg-btn-main:active,
+.btn-panel-toggle:active,
+#btn-panel-toggle:active,
+.notification:active {
+    transform: scale(0.96);
+    filter: brightness(1.08);
+    transition: transform 0.08s ease-out, filter 0.08s ease-out;
+}
+
+/* Slightly different — "press-darken" for flat panel items */
+.build-item:active,
+.resource:active,
+.status-bar-item:active {
+    background: rgba(126,184,224,0.18) !important;
 }

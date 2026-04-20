@@ -105,7 +105,8 @@ const UI = {
                     return;
                 }
 
-                // Toggle selection
+                // Toggle selection — always cancel any pending placement first
+                if (Game.cancelPendingPlacement) Game.cancelPendingPlacement();
                 if (Game.selectedBuilding === key) {
                     Game.selectedBuilding = null;
                     document.querySelectorAll('.build-item').forEach(i => i.classList.remove('active'));
@@ -233,6 +234,7 @@ const UI = {
         if (selectBtn) {
             selectBtn.addEventListener('click', () => {
                 const k = selectBtn.dataset.key;
+                if (Game.cancelPendingPlacement) Game.cancelPendingPlacement();
                 Game.selectedBuilding = k;
                 document.querySelectorAll('.build-item').forEach(i => i.classList.remove('active'));
                 const activeItem = document.querySelector(`.build-item[data-building-id="${k}"]`);
@@ -436,13 +438,79 @@ const UI = {
     },
 
     // ===== NOTIFICATIONS =====
+    // Dedup + stacking limit so rapid-fire events (e.g. many buildings
+    // finishing at once) don't flood the screen.
+    _notifActive: new Map(), // key = "type|message" -> {el, count, timer}
+    _NOTIF_MAX: 4,
+    _NOTIF_DURATION: 3000,
+
     notify(message, type = '') {
         const container = document.getElementById('notifications');
+        if (!container) return;
+        const key = type + '|' + message;
+
+        // Haptic feedback keyed to severity (once per message, not per dedup bump)
+        const existing = this._notifActive.get(key);
+        if (!existing && window.PWA) {
+            if (type === 'success') PWA.hapticSuccess();
+            else if (type === 'error') PWA.hapticError();
+            else if (type === 'warning') PWA.hapticMedium();
+        }
+
+        // Dedup: if same message is already visible, just bump its counter
+        // and reset its timer instead of adding another line.
+        if (existing) {
+            existing.count++;
+            const countSpan = existing.el.querySelector('.notif-count');
+            if (countSpan) {
+                countSpan.textContent = '×' + existing.count;
+            } else {
+                const span = document.createElement('span');
+                span.className = 'notif-count';
+                span.textContent = '×' + existing.count;
+                existing.el.appendChild(span);
+            }
+            // Restart timer
+            clearTimeout(existing.timer);
+            existing.el.classList.remove('notif-out');
+            existing.el.classList.add('notif-pulse');
+            setTimeout(() => existing.el.classList.remove('notif-pulse'), 300);
+            existing.timer = setTimeout(() => this._dismissNotif(key), this._NOTIF_DURATION);
+            return;
+        }
+
+        // Enforce max visible: dismiss oldest
+        while (this._notifActive.size >= this._NOTIF_MAX) {
+            const oldestKey = this._notifActive.keys().next().value;
+            this._dismissNotif(oldestKey, true);
+        }
+
         const notif = document.createElement('div');
         notif.className = 'notification ' + type;
-        notif.textContent = message;
+        const text = document.createElement('span');
+        text.className = 'notif-text';
+        text.textContent = message;
+        notif.appendChild(text);
         container.appendChild(notif);
-        setTimeout(() => notif.remove(), 3000);
+
+        const entry = {
+            el: notif,
+            count: 1,
+            timer: setTimeout(() => this._dismissNotif(key), this._NOTIF_DURATION),
+        };
+        this._notifActive.set(key, entry);
+    },
+
+    _dismissNotif(key, instant = false) {
+        const entry = this._notifActive.get(key);
+        if (!entry) return;
+        this._notifActive.delete(key);
+        if (instant) {
+            entry.el.remove();
+            return;
+        }
+        entry.el.classList.add('notif-out');
+        setTimeout(() => entry.el.remove(), 300);
     },
 
     // ===== EVENT LOG =====
@@ -547,13 +615,77 @@ const UI = {
         if (text) document.getElementById('loading-text').textContent = text;
     },
 
+    // ===== PLACEMENT CONFIRM BAR (mobile) =====
+    _placeConfirmBound: false,
+
+    showPlaceConfirm(bData) {
+        const el = document.getElementById('place-confirm');
+        if (!el) return;
+        document.getElementById('place-confirm-icon').textContent = bData.icon || '🏠';
+        document.getElementById('place-confirm-name').textContent = bData.name;
+
+        // Build cost string
+        const parts = [];
+        if (bData.cost && bData.cost.dana) {
+            parts.push('Rp ' + bData.cost.dana.toLocaleString('id-ID'));
+        }
+        if (bData.cost && bData.cost.material) {
+            parts.push('🧱 ' + bData.cost.material);
+        }
+        document.getElementById('place-confirm-cost').textContent = parts.join(' · ') || 'Gratis';
+
+        el.style.display = 'flex';
+        requestAnimationFrame(() => el.classList.add('pc-visible'));
+
+        // Bind once
+        if (!this._placeConfirmBound) {
+            this._placeConfirmBound = true;
+            document.getElementById('place-confirm-ok').addEventListener('click', () => {
+                if (typeof Game !== 'undefined' && Game.confirmPendingPlacement) {
+                    Game.confirmPendingPlacement();
+                }
+            });
+            document.getElementById('place-confirm-cancel').addEventListener('click', () => {
+                if (typeof Game !== 'undefined' && Game.cancelPendingPlacement) {
+                    Game.cancelPendingPlacement();
+                }
+            });
+        }
+    },
+
+    hidePlaceConfirm() {
+        const el = document.getElementById('place-confirm');
+        if (!el) return;
+        el.classList.remove('pc-visible');
+        setTimeout(() => { el.style.display = 'none'; }, 240);
+    },
+
+    // Smooth crossfade between full-screen app sections — native-app feel.
+    _transitionScreens(fromId, toId, displayType = 'flex') {
+        const from = document.getElementById(fromId);
+        const to = document.getElementById(toId);
+        if (!to) return;
+        // Start showing target already so there's no black frame
+        to.style.display = displayType;
+        to.classList.add('screen-enter');
+        requestAnimationFrame(() => {
+            if (from) from.classList.add('screen-leave');
+            requestAnimationFrame(() => to.classList.add('screen-enter-active'));
+        });
+        setTimeout(() => {
+            if (from) {
+                from.style.display = 'none';
+                from.classList.remove('screen-leave');
+            }
+            to.classList.remove('screen-enter', 'screen-enter-active');
+        }, 380);
+    },
+
     hideLoading() {
-        document.getElementById('loading-screen').style.display = 'none';
-        document.getElementById('intro-screen').style.display = 'flex';
+        this._transitionScreens('loading-screen', 'intro-screen', 'flex');
     },
 
     showGame() {
-        document.getElementById('intro-screen').style.display = 'none';
-        document.getElementById('game-screen').style.display = 'flex';
+        this._transitionScreens('intro-screen', 'game-screen', 'flex');
     }
 };

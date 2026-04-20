@@ -17,6 +17,8 @@ const PWA = {
         this._setupInstallPrompt();
         this._setupFullscreen();
         this._watchOnlineStatus();
+        this._setupHaptics();
+        this._setupBackButton();
     },
 
     // ── Platform detection ───────────────────────────────────
@@ -291,10 +293,114 @@ const PWA = {
 
     // ── Haptic feedback ──────────────────────────────────────
     vibrate(pattern) {
+        if (this._hapticDisabled) return;
         if (navigator.vibrate) navigator.vibrate(pattern);
     },
 
+    // Semantic aliases so call-sites read naturally.
+    hapticLight()   { this.vibrate(8); },
+    hapticMedium()  { this.vibrate(15); },
+    hapticHeavy()   { this.vibrate(28); },
+    hapticSuccess() { this.vibrate([12, 40, 18]); },
+    hapticError()   { this.vibrate([40, 30, 40]); },
+    hapticSelect()  { this.vibrate(5); },
+
     _vibrate(pattern) { this.vibrate(pattern); },
+
+    // ── Global haptic delegator ──────────────────────────────
+    // One document-level pointerdown listener fires a subtle vibration on any
+    // "important" tap so we get native-app feel without touching every handler.
+    _setupHaptics() {
+        if (!navigator.vibrate) return;
+        // Only vibrate on actual touch — not mouse clicks on desktop.
+        const isTouch = matchMedia('(hover: none)').matches || 'ontouchstart' in window;
+        if (!isTouch) return;
+
+        // Respect user preference — reduce motion users probably want haptic too,
+        // but provide an escape hatch via localStorage.
+        if (localStorage.getItem('haptics') === 'off') {
+            this._hapticDisabled = true;
+            return;
+        }
+
+        // Map selectors -> haptic intensity. Tier 1 = crisp short; Tier 2 = success.
+        const TIER_1 = [
+            '.btn-primary',
+            '.build-item',
+            '.build-btn',
+            '.panel-tab',
+            '.btn-speed',
+            '.feature',
+            '#btn-help',
+            '#btn-cancel-place',
+            '.tap-popup-btn',
+            '.fsg-btn-main',
+            '.fsg-btn-skip',
+            '#btn-panel-toggle',
+            '.mbi-btn-select',
+            '.resource',
+            '.status-bar-item',
+            '.modal-close',
+            '#modal-close',
+            'button',
+        ].join(',');
+
+        document.addEventListener('pointerdown', (e) => {
+            const t = e.target;
+            if (!t || !(t instanceof Element)) return;
+            if (t.closest('#game-canvas')) return; // canvas has its own tap logic
+            // Ignore disabled elements
+            if (t.closest('.disabled,[disabled]')) {
+                this.hapticError();
+                return;
+            }
+            if (t.closest(TIER_1)) this.hapticLight();
+        }, { passive: true });
+    },
+
+    // ── Android hardware-back: close modals/panels instead of exiting ──
+    _setupBackButton() {
+        if (!this._isAndroid && !this._isStandalone) {
+            // Also active for installed PWAs regardless of platform
+            if (!window.matchMedia('(display-mode: standalone)').matches) return;
+        }
+        // Seed history so first back press is catchable.
+        history.pushState({ gameState: 'root' }, '');
+        window.addEventListener('popstate', () => {
+            // 1) Close side-panel bottom sheet if open
+            const panel = document.getElementById('side-panel');
+            if (panel && panel.classList.contains('mobile-open')) {
+                panel.classList.remove('mobile-open');
+                const btn = document.getElementById('btn-panel-toggle');
+                if (btn) btn.classList.remove('panel-open');
+                history.pushState({ gameState: 'root' }, '');
+                this.hapticLight();
+                return;
+            }
+            // 2) Close mobile build info sheet
+            const mbi = document.getElementById('mobile-build-info');
+            if (mbi) {
+                mbi.remove();
+                history.pushState({ gameState: 'root' }, '');
+                this.hapticLight();
+                return;
+            }
+            // 3) Close event / guide modals
+            const modals = ['event-modal', 'guide-modal'];
+            for (const id of modals) {
+                const m = document.getElementById(id);
+                if (m && m.style.display !== 'none' && m.offsetParent !== null) {
+                    m.style.display = 'none';
+                    history.pushState({ gameState: 'root' }, '');
+                    this.hapticLight();
+                    return;
+                }
+            }
+            // 4) Nothing to close — let browser handle (may exit app).
+            // Re-seed so user can press back again without immediately exiting.
+            history.pushState({ gameState: 'root' }, '');
+        });
+    },
 };
 
 // Auto-init when DOM ready

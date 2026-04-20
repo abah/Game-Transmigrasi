@@ -41,6 +41,7 @@ const Renderer = {
     // ==============================
     cancelPlacement() {
         if (!Game.selectedBuilding) return;
+        if (Game.cancelPendingPlacement) Game.cancelPendingPlacement();
         Game.selectedBuilding = null;
         document.querySelectorAll('.build-item').forEach(i => i.classList.remove('active'));
         if (this.canvas) this.canvas.classList.remove('placing');
@@ -273,13 +274,46 @@ const Renderer = {
     },
 
     // Rich grass detail overlay (on top of sprite) — world-class realism
+    // Overdraw grass-color over the brown sprite edge to hide the visible
+    // diamond grid that Kenney sprites create when tiled.
+    _maskSpriteEdge(ctx, sx, sy) {
+        const hw = this.TW / 2, hh = this.TH / 2;
+        // Bottom brown edge band — paint it green (matches grass top face)
+        const g = ctx.createLinearGradient(sx, sy - hh * 0.3, sx, sy + hh);
+        g.addColorStop(0, 'rgba(130,186,74,0)');
+        g.addColorStop(0.55, 'rgba(130,186,74,0)');
+        g.addColorStop(0.85, 'rgba(130,186,74,0.65)');
+        g.addColorStop(1, 'rgba(110,170,62,0.9)');
+        ctx.fillStyle = g;
+        this._tileDiamond(ctx, sx, sy, this.TW, this.TH);
+        ctx.fill();
+    },
+
     _addGrassDetails(ctx, sx, sy, tx, ty) {
         const rng = this._seededRandom(tx * 31 + ty * 17);
         const hw = this.TW / 2, hh = this.TH / 2;
 
-        ctx.save();
-        this._tileDiamond(ctx, sx, sy, this.TW, this.TH);
-        ctx.clip();
+        // NOTE: intentionally NOT clipping to tile diamond — we WANT details
+        // (tufts, flowers, soft patches) to bleed across tile boundaries so the
+        // visible diamond-grid seams of the sprite get visually broken up.
+        // This is the Township trick for seamless grass.
+
+        // --- Low-frequency color blob (spans multiple tiles, masks sprite seams) ---
+        // Use coarser coordinate (every 2 tiles) so blobs repeat at larger scale
+        const blobRng = this._seededRandom(((tx >> 1) * 73) ^ ((ty >> 1) * 131));
+        if (blobRng() > 0.3) {
+            const bx = sx + (blobRng() - 0.5) * this.TW * 1.1;
+            const by = sy + (blobRng() - 0.5) * this.TH * 1.1;
+            const br = this.TW * (0.55 + blobRng() * 0.4);
+            const tint = blobRng() > 0.5 ? 18 : -14;
+            const blobG = ctx.createRadialGradient(bx, by, 1, bx, by, br);
+            blobG.addColorStop(0, `rgba(${120 + tint * 0.4},${170 + tint},${60 + tint * 0.3},${0.18 + blobRng() * 0.1})`);
+            blobG.addColorStop(1, 'rgba(120,170,60,0)');
+            ctx.fillStyle = blobG;
+            ctx.beginPath();
+            ctx.ellipse(bx, by, br, br * 0.55, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         // --- Light/shadow patches (simulates terrain micro-undulation) ---
         ctx.fillStyle = 'rgba(255,255,230,0.035)';
@@ -287,11 +321,12 @@ const Renderer = {
         ctx.ellipse(sx - hw * 0.15, sy - hh * 0.2, hw * 0.4, hh * 0.35, 0.7, 0, Math.PI * 2);
         ctx.fill();
 
-        // --- Grass blade clusters ---
+        // --- Grass blade clusters (bleed slightly across tile borders) ---
         const clusters = 2 + Math.floor(rng() * 3);
         for (let c = 0; c < clusters; c++) {
-            const cx = sx + (rng() - 0.5) * this.TW * 0.6;
-            const cy = sy + (rng() - 0.5) * this.TH * 0.4;
+            // Expanded range 0.95 (was 0.6) lets clusters cross tile edges
+            const cx = sx + (rng() - 0.5) * this.TW * 0.95;
+            const cy = sy + (rng() - 0.5) * this.TH * 0.75;
             const bladeCount = 3 + Math.floor(rng() * 3);
             const greenVar = Math.floor((rng() - 0.5) * 30);
 
@@ -309,11 +344,36 @@ const Renderer = {
             }
         }
 
+        // --- Occasional taller grass tuft on tile edges (to hide seams) ---
+        if (rng() > 0.5) {
+            const sideRng = rng();
+            // Place on one of the 4 diamond edges, extending outward
+            const edgeIdx = Math.floor(sideRng * 4);
+            let ex, ey;
+            if (edgeIdx === 0) { ex = sx + hw * 0.45; ey = sy - hh * 0.45; }   // upper-right
+            else if (edgeIdx === 1) { ex = sx + hw * 0.45; ey = sy + hh * 0.45; }   // lower-right
+            else if (edgeIdx === 2) { ex = sx - hw * 0.45; ey = sy + hh * 0.45; }   // lower-left
+            else { ex = sx - hw * 0.45; ey = sy - hh * 0.45; }   // upper-left
+            // Taller tuft — 5 blades
+            for (let b = 0; b < 5; b++) {
+                const bx = ex + (rng() - 0.5) * 4;
+                const by = ey + (rng() - 0.5) * 2;
+                const bh = 3 + rng() * 3;
+                const lean = (rng() - 0.5) * 2.2;
+                ctx.strokeStyle = `rgba(${60 + Math.floor(rng() * 20)},${155 + Math.floor(rng() * 20)},${35},${0.35 + rng() * 0.2})`;
+                ctx.lineWidth = 0.45;
+                ctx.beginPath();
+                ctx.moveTo(bx, by);
+                ctx.quadraticCurveTo(bx + lean * 0.4, by - bh * 0.6, bx + lean, by - bh);
+                ctx.stroke();
+            }
+        }
+
         // --- Small wildflowers ---
         if (rng() > 0.6) {
             const fCols = ['#e8e060', '#e080a0', '#f0f0f0', '#a0a0ff', '#ffb0c0'];
-            const fx = sx + (rng() - 0.5) * 16;
-            const fy = sy + (rng() - 0.5) * 5;
+            const fx = sx + (rng() - 0.5) * 18;
+            const fy = sy + (rng() - 0.5) * 8;
             ctx.strokeStyle = 'rgba(60,120,40,0.3)';
             ctx.lineWidth = 0.3;
             ctx.beginPath();
@@ -338,7 +398,27 @@ const Renderer = {
             ctx.fill();
         }
 
-        ctx.restore();
+        // --- Occasional tiny mushroom cluster (Township charm) ---
+        if (rng() > 0.93) {
+            const mx = sx + (rng() - 0.5) * 12;
+            const my = sy + (rng() - 0.3) * 4;
+            for (let k = 0; k < 3; k++) {
+                const sx2 = mx + k * 1.8 - 1.8;
+                // Stem
+                ctx.fillStyle = 'rgba(240,232,200,0.75)';
+                ctx.fillRect(sx2 - 0.4, my - 1.2, 0.8, 1.4);
+                // Cap (red with white spots)
+                ctx.fillStyle = '#c83030';
+                ctx.beginPath();
+                ctx.ellipse(sx2, my - 1.8, 1.4, 0.9, 0, Math.PI, 0);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                ctx.beginPath();
+                ctx.arc(sx2 - 0.3, my - 2.1, 0.2, 0, Math.PI * 2);
+                ctx.arc(sx2 + 0.4, my - 1.9, 0.18, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
     },
 
     // Water animation overlay (on top of sprite)
@@ -450,16 +530,10 @@ const Renderer = {
             if (isSecondary && rng() > 0.4) {
                 // Secondary trees are often smaller bushes/undergrowth
                 this._treeBush(ctx, px, py, this._seededRandom(tx * 200 + ty * 300 + t * 77), anim);
-            } else if (typeRoll < 0.10) {
-                this._drawSpriteTree(ctx, px, py, 'treeTall', this._seededRandom(tx * 51 + ty * 73 + t * 99), anim);
-            } else if (typeRoll < 0.17) {
-                this._drawSpriteTree(ctx, px, py, 'coniferTall', this._seededRandom(tx * 53 + ty * 79 + t * 99), anim);
-            } else if (typeRoll < 0.22) {
-                this._drawSpriteTree(ctx, px, py, 'coniferAltTall', this._seededRandom(tx * 57 + ty * 83 + t * 99), anim);
-            } else if (typeRoll < 0.27) {
-                this._drawSpriteTree(ctx, px, py, 'coniferShort', this._seededRandom(tx * 61 + ty * 89 + t * 99), anim);
             } else if (typeRoll < 0.32) {
-                this._drawSpriteTree(ctx, px, py, 'coniferAltShort', this._seededRandom(tx * 67 + ty * 91 + t * 99), anim);
+                // What used to be sprite-based trees (treeTall, conifer variants)
+                // now uses the fully-drawn canvas conifer for consistent lighting.
+                this._treeLargeConifer(ctx, px, py, this._seededRandom(tx * 53 + ty * 79 + t * 99), anim);
             } else if (typeRoll < 0.44) {
                 this._treeBanyan(ctx, px, py, this._seededRandom(tx * 71 + ty * 97 + t * 99), anim);
             } else if (typeRoll < 0.54) {
@@ -653,15 +727,8 @@ const Renderer = {
         const sway = Math.sin(anim * 0.4 + x * 0.03) * 1;
         const swayFine = Math.sin(anim * 1.1 + x * 0.07) * 0.5;
 
-        // --- Shadow with soft radial gradient ---
-        const shadowGrad = ctx.createRadialGradient(x, y + 3, 2, x, y + 3, 16);
-        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.2)');
-        shadowGrad.addColorStop(0.6, 'rgba(0,0,0,0.1)');
-        shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = shadowGrad;
-        ctx.beginPath();
-        ctx.ellipse(x, y + 3, 16, 7, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Directional ground shadow (banyan has a wide crown)
+        this._treeShadowDirectional(ctx, x, y, 16, 7);
 
         // --- Main trunk with gradient and gnarled texture ---
         const tw = 3.5 + rng() * 2;
@@ -779,11 +846,10 @@ const Renderer = {
             ctx.fill();
         }
 
-        // --- Canopy bottom shadow (volume) ---
-        ctx.fillStyle = 'rgba(0,20,0,0.06)';
-        ctx.beginPath();
-        ctx.ellipse(x + sway * 0.5, canopyCenterY + 8, 12, 4, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Township-style lighting (warm rim + cool shade + scallops)
+        this._canopyLighting(ctx, x + sway * 0.4, canopyCenterY + 1,
+            h * 0.6, h * 0.5,
+            { sway: sway });
     },
 
     // === BIRCH tree — AAA quality (white trunk, elegant drooping branches) ===
@@ -792,15 +858,8 @@ const Renderer = {
         const sway = Math.sin(anim * 0.7 + x * 0.04) * 1.5;
         const swayFine = Math.sin(anim * 1.5 + x * 0.09) * 0.6;
 
-        // --- Soft shadow ---
-        const shadowGrad = ctx.createRadialGradient(x + 1, y + 2, 1, x + 1, y + 2, 10);
-        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.14)');
-        shadowGrad.addColorStop(0.7, 'rgba(0,0,0,0.06)');
-        shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = shadowGrad;
-        ctx.beginPath();
-        ctx.ellipse(x + 1, y + 2, 10, 4.5, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Directional ground shadow
+        this._treeShadowDirectional(ctx, x, y, 10, 4.5);
 
         // --- White trunk with gradient (lit from left) ---
         const trunkGrad = ctx.createLinearGradient(x - 2, y, x + 2, y - h * 0.3);
@@ -899,26 +958,19 @@ const Renderer = {
         ctx.beginPath();
         ctx.ellipse(x + sway - 1.5, crownY - 1.5, 4, 3.5, 0, 0, Math.PI * 2);
         ctx.fill();
-        // Sunlight on crown
-        ctx.fillStyle = 'rgba(200,255,120,0.1)';
-        ctx.beginPath();
-        ctx.ellipse(x + sway - 2, crownY - 2, 3, 2, 0, 0, Math.PI * 2);
-        ctx.fill();
+
+        // Township-style canopy lighting (small birch crown)
+        this._canopyLighting(ctx, x + sway, crownY,
+            7, 6,
+            { sway: sway, scallops: false });
     },
 
     // === BAMBOO cluster — AAA quality ===
     _treeBamboo(ctx, x, y, rng, anim) {
         const stalks = 4 + Math.floor(rng() * 4);
 
-        // --- Soft cluster shadow ---
-        const shadowGrad = ctx.createRadialGradient(x, y + 2, 1, x, y + 2, 10 + stalks);
-        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.12)');
-        shadowGrad.addColorStop(0.7, 'rgba(0,0,0,0.05)');
-        shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = shadowGrad;
-        ctx.beginPath();
-        ctx.ellipse(x, y + 2, 10 + stalks, 4, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Directional ground shadow
+        this._treeShadowDirectional(ctx, x, y, 10 + stalks, 4);
 
         // --- Fallen bamboo leaves on ground ---
         for (let i = 0; i < 3; i++) {
@@ -1027,15 +1079,8 @@ const Renderer = {
         const sway = Math.sin(anim * 0.5 + x * 0.04) * 1;
         const swayFine = Math.sin(anim * 1.3 + x * 0.08) * 0.4;
 
-        // --- Soft shadow ---
-        const shadowGrad = ctx.createRadialGradient(x, y + 3, 1, x, y + 3, 12);
-        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.16)');
-        shadowGrad.addColorStop(0.6, 'rgba(0,0,0,0.07)');
-        shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = shadowGrad;
-        ctx.beginPath();
-        ctx.ellipse(x, y + 3, 12, 5.5, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Directional ground shadow
+        this._treeShadowDirectional(ctx, x, y, 12, 5.5);
 
         // --- Trunk with cylindrical shading ---
         const tw = 2.5 + rng();
@@ -1182,15 +1227,8 @@ const Renderer = {
         const sway = Math.sin(anim * 0.35 + x * 0.03) * 0.8;
         const swayFine = Math.sin(anim * 1.0 + x * 0.06) * 0.4;
 
-        // --- Wide, soft shadow (characteristic flat spread) ---
-        const shadowGrad = ctx.createRadialGradient(x, y + 4, 2, x, y + 4, 18);
-        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.18)');
-        shadowGrad.addColorStop(0.5, 'rgba(0,0,0,0.08)');
-        shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = shadowGrad;
-        ctx.beginPath();
-        ctx.ellipse(x, y + 4, 18, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Directional ground shadow (wide, characteristic acacia spread)
+        this._treeShadowDirectional(ctx, x, y, 18, 6);
 
         // --- Trunk with gradient and natural curve ---
         const trunkGrad = ctx.createLinearGradient(x - 2, y, x + 2, y - h * 0.5);
@@ -1312,15 +1350,8 @@ const Renderer = {
         const sway = Math.sin(anim * 0.8 + x * 0.06) * 0.6;
         const swayFine = Math.sin(anim * 1.5 + x * 0.1) * 0.3;
 
-        // --- Soft ground shadow ---
-        const shadowGrad = ctx.createRadialGradient(x, y + 2, 1, x, y + 2, 11);
-        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.14)');
-        shadowGrad.addColorStop(0.6, 'rgba(0,0,0,0.06)');
-        shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = shadowGrad;
-        ctx.beginPath();
-        ctx.ellipse(x, y + 2, 11, 4.5, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Directional ground shadow
+        this._treeShadowDirectional(ctx, x, y, 11, 4.5);
 
         // --- Short trunk (barely visible through foliage) ---
         const trunkGrad = ctx.createLinearGradient(x - 1.5, y, x + 1.5, y - 4);
@@ -1575,7 +1606,12 @@ const Renderer = {
                 // Place building at current hoverTile (updated live during touchmove)
                 // Use hoverTile if finger was dragged, else compute from lift position
                 const placeTile = this.dragDistance > 10 ? this.hoverTile : tile;
-                Game.placeBuilding(placeTile.x, placeTile.y);
+                // Mobile: show preview + confirm bar. Desktop: commit immediately.
+                if (Game.requestPlacement) {
+                    Game.requestPlacement(placeTile.x, placeTile.y);
+                } else {
+                    Game.placeBuilding(placeTile.x, placeTile.y);
+                }
             } else if (this.dragDistance < 10) {
                 // Tap without building selected — select tile info
                 if (Game.selectTile) Game.selectTile(tile.x, tile.y);
@@ -1622,9 +1658,6 @@ const Renderer = {
         ctx.lineTo(sx - hw, sy - h);
         ctx.closePath();
         ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
 
         // Left face with gradient
         let gl = ctx.createLinearGradient(sx - hw, sy - h, sx - hw, sy);
@@ -1638,9 +1671,8 @@ const Renderer = {
         ctx.lineTo(sx, sy - hd);
         ctx.closePath();
         ctx.fill();
-        ctx.stroke();
 
-        // Right face with gradient
+        // Right face with gradient (slightly darker side — shade)
         let gr = ctx.createLinearGradient(sx + hw, sy - h, sx + hw, sy);
         gr.addColorStop(0, rightCols[0]);
         gr.addColorStop(1, rightCols[1]);
@@ -1652,7 +1684,60 @@ const Renderer = {
         ctx.lineTo(sx, sy - hd);
         ctx.closePath();
         ctx.fill();
+
+        // --- Township-style silhouette outline (stronger, cartoon-like) ---
+        ctx.strokeStyle = 'rgba(35,22,12,0.55)';
+        ctx.lineWidth = 0.9;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        // Outer silhouette path (front-facing 5-sided shape)
+        ctx.moveTo(sx - hw, sy);
+        ctx.lineTo(sx - hw, sy - h);
+        ctx.lineTo(sx, sy - hd - h);
+        ctx.lineTo(sx + hw, sy - h);
+        ctx.lineTo(sx + hw, sy);
+        ctx.lineTo(sx, sy + hd);
+        ctx.closePath();
         ctx.stroke();
+        // Vertical corner edge (center ridge where left & right walls meet)
+        ctx.strokeStyle = 'rgba(30,20,10,0.35)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - hd);
+        ctx.lineTo(sx, sy + hd);
+        ctx.stroke();
+
+        // --- Ambient occlusion at base (dark gradient where walls meet ground) ---
+        const aoG = ctx.createLinearGradient(sx, sy - 5, sx, sy + hd + 1);
+        aoG.addColorStop(0, 'rgba(0,0,0,0)');
+        aoG.addColorStop(1, 'rgba(0,0,0,0.28)');
+        ctx.fillStyle = aoG;
+        ctx.beginPath();
+        ctx.moveTo(sx - hw, sy);
+        ctx.lineTo(sx, sy + hd);
+        ctx.lineTo(sx + hw, sy);
+        ctx.lineTo(sx + hw, sy - 3);
+        ctx.lineTo(sx, sy + hd - 4);
+        ctx.lineTo(sx - hw, sy - 3);
+        ctx.closePath();
+        ctx.fill();
+
+        // --- Rim / specular highlight on sunward edge (top-left) ---
+        if (h > 4) {
+            ctx.strokeStyle = 'rgba(255,250,220,0.35)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(sx - hw + 0.5, sy - h + 0.5);
+            ctx.lineTo(sx - 0.2, sy - hd - h + 0.5);
+            ctx.stroke();
+            // Very subtle vertical highlight down left corner (top portion)
+            ctx.strokeStyle = 'rgba(255,250,220,0.18)';
+            ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            ctx.moveTo(sx - hw + 0.3, sy - h + 0.5);
+            ctx.lineTo(sx - hw + 0.3, sy - h * 0.55);
+            ctx.stroke();
+        }
     },
 
     // Hip (pyramid) roof
@@ -1660,12 +1745,115 @@ const Renderer = {
         const ow = hw + overhang;
         const od = hd + overhang * 0.5;
         const by = sy - baseH;
+        const peakY = by - od - roofH;
 
         // Left slope
         ctx.fillStyle = leftCol;
         ctx.beginPath();
         ctx.moveTo(sx - ow, by + 1);
-        ctx.lineTo(sx, by - od - roofH);
+        ctx.lineTo(sx, peakY);
+        ctx.lineTo(sx, by - hd);
+        ctx.lineTo(sx - hw, by);
+        ctx.closePath();
+        ctx.fill();
+
+        // Right slope (shaded darker)
+        ctx.fillStyle = rightCol;
+        ctx.beginPath();
+        ctx.moveTo(sx + ow, by + 1);
+        ctx.lineTo(sx, peakY);
+        ctx.lineTo(sx, by - hd);
+        ctx.lineTo(sx + hw, by);
+        ctx.closePath();
+        ctx.fill();
+
+        // Top/front-facing slopes
+        ctx.fillStyle = topCol;
+        ctx.beginPath();
+        ctx.moveTo(sx, peakY);
+        ctx.lineTo(sx + ow, by + 1);
+        ctx.lineTo(sx, by + od + 1);
+        ctx.lineTo(sx - ow, by + 1);
+        ctx.closePath();
+        ctx.fill();
+
+        // --- Shingle texture (subtle horizontal tile rows on slopes) ---
+        ctx.save();
+        ctx.strokeStyle = 'rgba(25,12,5,0.22)';
+        ctx.lineWidth = 0.4;
+        const rows = Math.max(2, Math.min(5, Math.round(roofH / 2.5)));
+        for (let r = 1; r < rows; r++) {
+            const t = r / rows;
+            // Left slope shingle row: from eave to peak interpolation
+            const e1x = sx - ow + ow * t, e1y = by + 1 - (by + 1 - peakY) * t * 0.3;
+            const r1x = sx - ow * (1 - t), r1y = by + 1 - (by + 1 - peakY) * t;
+            ctx.beginPath();
+            ctx.moveTo(sx - ow + ow * t * 0.6, by + 1 - t * (by - peakY) * 0.3);
+            ctx.lineTo(sx - ow * (1 - t * 0.5), by + 1 - t * (by - peakY));
+            ctx.stroke();
+            // Front (center) slope row — horizontal band
+            ctx.beginPath();
+            ctx.moveTo(sx - ow * (1 - t * 0.5), by + od * (1 - t) * 0.3);
+            ctx.lineTo(sx + ow * (1 - t * 0.5), by + od * (1 - t) * 0.3);
+            ctx.stroke();
+            // Right slope row
+            ctx.beginPath();
+            ctx.moveTo(sx + ow - ow * t * 0.6, by + 1 - t * (by - peakY) * 0.3);
+            ctx.lineTo(sx + ow * (1 - t * 0.5), by + 1 - t * (by - peakY));
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // --- Silhouette outline (Township-style) ---
+        ctx.save();
+        ctx.strokeStyle = 'rgba(35,22,12,0.55)';
+        ctx.lineWidth = 0.9;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(sx - ow, by + 1);
+        ctx.lineTo(sx, peakY);
+        ctx.lineTo(sx + ow, by + 1);
+        ctx.lineTo(sx, by + od + 1);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+
+        // --- Eave shadow (darker line under overhang) ---
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(sx - ow, by + 1);
+        ctx.lineTo(sx, by + od + 1);
+        ctx.lineTo(sx + ow, by + 1);
+        ctx.stroke();
+
+        // --- Apex highlight dot + ridge line ---
+        ctx.fillStyle = 'rgba(255,245,210,0.6)';
+        ctx.beginPath();
+        ctx.arc(sx, peakY, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+        // Sunward ridge highlight
+        ctx.strokeStyle = 'rgba(255,245,210,0.40)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sx - ow + 1, by + 0.5);
+        ctx.lineTo(sx - 0.3, peakY + 0.5);
+        ctx.stroke();
+    },
+
+    // Gable roof (ridged)
+    _gableRoof(ctx, sx, sy, hw, hd, baseH, roofH, overhang, leftCol, rightCol, ridgeCol) {
+        const ow = hw + overhang;
+        const od = hd + overhang * 0.5;
+        const by = sy - baseH;
+        const rLX = sx - ow * 0.1, rRX = sx + ow * 0.1, rY = by - roofH;
+
+        // Left slope
+        ctx.fillStyle = leftCol;
+        ctx.beginPath();
+        ctx.moveTo(sx - ow, by + 1);
+        ctx.lineTo(rLX, rY);
+        ctx.lineTo(rRX, rY);
         ctx.lineTo(sx, by - hd);
         ctx.lineTo(sx - hw, by);
         ctx.closePath();
@@ -1675,65 +1863,85 @@ const Renderer = {
         ctx.fillStyle = rightCol;
         ctx.beginPath();
         ctx.moveTo(sx + ow, by + 1);
-        ctx.lineTo(sx, by - od - roofH);
+        ctx.lineTo(rRX, rY);
+        ctx.lineTo(rLX, rY);
         ctx.lineTo(sx, by - hd);
         ctx.lineTo(sx + hw, by);
         ctx.closePath();
         ctx.fill();
 
-        // Top surface (front-facing slopes)
-        ctx.fillStyle = topCol;
-        ctx.beginPath();
-        ctx.moveTo(sx, by - od - roofH);
-        ctx.lineTo(sx + ow, by + 1);
-        ctx.lineTo(sx, by + od + 1);
-        ctx.lineTo(sx - ow, by + 1);
-        ctx.closePath();
-        ctx.fill();
-    },
-
-    // Gable roof (ridged)
-    _gableRoof(ctx, sx, sy, hw, hd, baseH, roofH, overhang, leftCol, rightCol, ridgeCol) {
-        const ow = hw + overhang;
-        const od = hd + overhang * 0.5;
-        const by = sy - baseH;
-
-        // Left slope
-        ctx.fillStyle = leftCol;
-        ctx.beginPath();
-        ctx.moveTo(sx - ow, by + 1);
-        ctx.lineTo(sx - ow * 0.1, by - roofH);
-        ctx.lineTo(sx + ow * 0.1, by - roofH);
-        ctx.lineTo(sx, by - hd);
-        ctx.lineTo(sx - hw, by);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-
-        // Right slope  
-        ctx.fillStyle = rightCol;
-        ctx.beginPath();
-        ctx.moveTo(sx + ow, by + 1);
-        ctx.lineTo(sx + ow * 0.1, by - roofH);
-        ctx.lineTo(sx - ow * 0.1, by - roofH);
-        ctx.lineTo(sx, by - hd);
-        ctx.lineTo(sx + hw, by);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // Front face (visible lower part of gable)
+        // Front gable face (visible lower part)
         ctx.fillStyle = ridgeCol;
         ctx.beginPath();
-        ctx.moveTo(sx - ow * 0.1, by - roofH);
-        ctx.lineTo(sx + ow * 0.1, by - roofH);
+        ctx.moveTo(rLX, rY);
+        ctx.lineTo(rRX, rY);
         ctx.lineTo(sx + ow, by + 1);
         ctx.lineTo(sx, by + od + 1);
         ctx.lineTo(sx - ow, by + 1);
         ctx.closePath();
         ctx.fill();
+
+        // --- Shingle rows on front face ---
+        ctx.save();
+        ctx.strokeStyle = 'rgba(25,12,5,0.20)';
+        ctx.lineWidth = 0.4;
+        const rows = Math.max(2, Math.min(6, Math.round(roofH / 2.2)));
+        for (let r = 1; r < rows; r++) {
+            const t = r / rows;
+            const y = rY + (by + 1 - rY) * t;
+            // Front face horizontal tile band (slightly interpolated width)
+            const xOffL = ow * 0.1 + (ow - ow * 0.1) * t;
+            const xOffR = ow * 0.1 + (ow - ow * 0.1) * t;
+            ctx.beginPath();
+            ctx.moveTo(sx - xOffL, y);
+            ctx.lineTo(sx + xOffR, y);
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // --- Ridge outline + highlight (the peak ridge line) ---
+        ctx.strokeStyle = 'rgba(30,15,5,0.55)';
+        ctx.lineWidth = 0.9;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(rLX, rY);
+        ctx.lineTo(rRX, rY);
+        ctx.stroke();
+        // Ridge cap highlight
+        ctx.strokeStyle = 'rgba(255,240,200,0.55)';
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(rLX + 0.3, rY - 0.3);
+        ctx.lineTo(rRX - 0.3, rY - 0.3);
+        ctx.stroke();
+
+        // --- Silhouette outline ---
+        ctx.strokeStyle = 'rgba(35,22,12,0.55)';
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(sx - ow, by + 1);
+        ctx.lineTo(rLX, rY);
+        ctx.lineTo(rRX, rY);
+        ctx.lineTo(sx + ow, by + 1);
+        ctx.lineTo(sx, by + od + 1);
+        ctx.closePath();
+        ctx.stroke();
+
+        // --- Eave shadow line under overhang ---
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(sx - ow, by + 1);
+        ctx.lineTo(sx, by + od + 1);
+        ctx.lineTo(sx + ow, by + 1);
+        ctx.stroke();
+
+        // --- Sunward slope highlight (left eave edge) ---
+        ctx.strokeStyle = 'rgba(255,245,210,0.40)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sx - ow + 0.8, by + 0.5);
+        ctx.lineTo(rLX + 0.3, rY + 0.5);
         ctx.stroke();
     },
 
@@ -1877,15 +2085,8 @@ const Renderer = {
         const sway = Math.sin(anim * 0.5 + x * 0.04) * 1;
         const swayFine = Math.sin(anim * 1.2 + x * 0.08) * 0.4;
 
-        // --- Soft radial shadow ---
-        const shadowGrad = ctx.createRadialGradient(x, y + 3, 1, x, y + 3, 12);
-        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.16)');
-        shadowGrad.addColorStop(0.6, 'rgba(0,0,0,0.07)');
-        shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = shadowGrad;
-        ctx.beginPath();
-        ctx.ellipse(x, y + 3, 12, 5.5, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Directional ground shadow (sun upper-left → shadow lower-right)
+        this._treeShadowDirectional(ctx, x, y, 12, 5.5);
 
         // --- Trunk with cylindrical gradient ---
         const tw = 2.5 + rng() * 1.5;
@@ -1964,17 +2165,11 @@ const Renderer = {
             ctx.fill();
         }
 
-        // --- Sun highlight ---
-        ctx.fillStyle = 'rgba(190,250,110,0.07)';
-        ctx.beginPath();
-        ctx.ellipse(x - 2 + sway, canopyCY - 4, 5, 3.5, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // --- Canopy underside shadow (volume) ---
-        ctx.fillStyle = 'rgba(0,20,0,0.04)';
-        ctx.beginPath();
-        ctx.ellipse(x + sway * 0.3, canopyCY + 7, 8, 3, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Township-style lighting: warm rim upper-left, dark crescent lower-right,
+        // plus scalloped leaf-cluster border for the "hand-painted" fluffy look.
+        this._canopyLighting(ctx, x + sway * 0.2, canopyCY + 1,
+            h * 0.55, h * 0.45,
+            { sway: sway });
     },
 
     // Classic conifer tree — AAA quality
@@ -1982,15 +2177,8 @@ const Renderer = {
         const h = 18 + rng() * 10;
         const sway = Math.sin(anim * 0.45 + x * 0.03) * 0.8;
 
-        // --- Soft shadow ---
-        const shadowGrad = ctx.createRadialGradient(x, y + 2, 1, x, y + 2, 8);
-        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.14)');
-        shadowGrad.addColorStop(0.6, 'rgba(0,0,0,0.06)');
-        shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = shadowGrad;
-        ctx.beginPath();
-        ctx.ellipse(x, y + 2, 8, 4, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Directional ground shadow
+        this._treeShadowDirectional(ctx, x, y, 8.5, 4);
 
         // --- Trunk with gradient ---
         const tw = 2 + rng();
@@ -2205,6 +2393,417 @@ const Renderer = {
     },
 
     // ==============================
+    //  TOWNSHIP-STYLE VISUAL HELPERS
+    //  Universal layers applied by renderBuilding pipeline
+    // ==============================
+
+    // Soft, layered drop shadow (Township-style) — multiple elliptical passes for soft falloff
+    // Soft drop shadow offset toward the SHADOW side (sun from upper-left,
+    // so shadow falls to the lower-right). Second argument `height` (optional)
+    // makes taller buildings cast longer, slightly displaced shadows.
+    _softShadow(ctx, sx, sy, size, height) {
+        const scale = size || 1;
+        const tall = Math.max(1, (height || 20) / 20);      // 1.0 for average, >1 for tall buildings
+        const baseW = 18 + scale * 10;
+        const baseH = baseW * 0.42;
+        // Sun from upper-left → shadow displaced toward lower-right
+        const offX = 4 * scale * tall;
+        const offY = 3 + 2 * tall;
+        // Slight clockwise tilt (roughly aligned with sun angle)
+        const tilt = -0.12;
+
+        // Outer very soft halo (extra wide for tall buildings, fades to 0)
+        let g = ctx.createRadialGradient(
+            sx + offX, sy + offY, baseW * 0.3,
+            sx + offX, sy + offY, baseW * 1.35 * tall
+        );
+        g.addColorStop(0, 'rgba(10,15,10,0.22)');
+        g.addColorStop(0.55, 'rgba(10,15,10,0.10)');
+        g.addColorStop(1, 'rgba(10,15,10,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(sx + offX, sy + offY,
+                    baseW * 1.28 * tall, baseH * 1.18 * tall,
+                    tilt, 0, Math.PI * 2);
+        ctx.fill();
+        // Mid darker penumbra
+        ctx.fillStyle = 'rgba(10,15,10,0.14)';
+        ctx.beginPath();
+        ctx.ellipse(sx + offX * 0.8, sy + offY * 0.8,
+                    baseW * 0.95 * tall, baseH * 0.92 * tall,
+                    tilt, 0, Math.PI * 2);
+        ctx.fill();
+        // Inner darker core (tight contact shadow near the building base)
+        ctx.fillStyle = 'rgba(8,12,8,0.22)';
+        ctx.beginPath();
+        ctx.ellipse(sx + offX * 0.35, sy + 1.5,
+                    baseW * 0.72, baseH * 0.78,
+                    tilt, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    // Directional tree ground shadow (sun from upper-left → shadow lower-right).
+    // Used by all tree species instead of centered ellipse for consistent lighting
+    // and better "3D" feel.  `rx` and `ry` are canopy semi-axes (optional).
+    _treeShadowDirectional(ctx, x, y, rx, ry) {
+        const RX = rx || 10;
+        const RY = ry || RX * 0.45;
+        // Offset shadow toward lower-right (sun angle matches _softShadow)
+        const ox = RX * 0.35;
+        const oy = 2 + RY * 0.3;
+        const tilt = -0.12;
+
+        // Wide soft halo
+        let g = ctx.createRadialGradient(
+            x + ox, y + oy, RX * 0.25,
+            x + ox, y + oy, RX * 1.25
+        );
+        g.addColorStop(0, 'rgba(10,20,8,0.20)');
+        g.addColorStop(0.55, 'rgba(10,20,8,0.09)');
+        g.addColorStop(1, 'rgba(10,20,8,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(x + ox, y + oy, RX * 1.2, RY * 1.15, tilt, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Contact shadow — darker near the trunk base
+        ctx.fillStyle = 'rgba(10,20,8,0.22)';
+        ctx.beginPath();
+        ctx.ellipse(x + ox * 0.4, y + 1.5, RX * 0.65, RY * 0.72, tilt, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    // Township-style canopy lighting pass — call AFTER main foliage layers.
+    // Adds: (1) warm sun-kissed rim on upper-left, (2) cool occlusion crescent
+    // on lower-right inside canopy, (3) subtle scalloped fluff border.
+    _canopyLighting(ctx, cx, cy, rx, ry, opts) {
+        const o = opts || {};
+        const sway = o.sway || 0;
+        const darkTone = o.darkTone || 'rgba(0,18,0,0.22)';
+        const warmTone = o.warmTone || 'rgba(255,245,180,0.28)';
+        const scallopDark = o.scallopDark || 'rgba(18,56,18,0.55)';
+
+        // Warm rim highlight on upper-left (crescent)
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.clip();
+        const rimGrad = ctx.createRadialGradient(
+            cx - rx * 0.45 + sway * 0.5, cy - ry * 0.55,
+            Math.min(rx, ry) * 0.05,
+            cx - rx * 0.45 + sway * 0.5, cy - ry * 0.55,
+            Math.max(rx, ry) * 0.95
+        );
+        rimGrad.addColorStop(0, warmTone);
+        rimGrad.addColorStop(0.45, warmTone.replace(/,[\d.]+\)/, ',0.12)'));
+        rimGrad.addColorStop(1, 'rgba(255,245,180,0)');
+        ctx.fillStyle = rimGrad;
+        ctx.fillRect(cx - rx * 1.2, cy - ry * 1.2, rx * 2.4, ry * 2.4);
+        ctx.restore();
+
+        // Cool occlusion / underside shade on lower-right (crescent)
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.clip();
+        const shadeGrad = ctx.createRadialGradient(
+            cx + rx * 0.55, cy + ry * 0.55,
+            Math.min(rx, ry) * 0.1,
+            cx + rx * 0.55, cy + ry * 0.55,
+            Math.max(rx, ry) * 0.95
+        );
+        shadeGrad.addColorStop(0, darkTone);
+        shadeGrad.addColorStop(0.5, darkTone.replace(/,[\d.]+\)/, ',0.10)'));
+        shadeGrad.addColorStop(1, 'rgba(0,18,0,0)');
+        ctx.fillStyle = shadeGrad;
+        ctx.fillRect(cx - rx * 1.2, cy - ry * 1.2, rx * 2.4, ry * 2.4);
+        ctx.restore();
+
+        // Fluff scallops along silhouette border (Township hand-painted look)
+        if (o.scallops !== false) {
+            const scallops = o.scalloptCount || 7;
+            const rand = this._seededRandom((cx * 13 + cy * 7) | 0);
+            ctx.fillStyle = scallopDark;
+            for (let i = 0; i < scallops; i++) {
+                const a = (i / scallops) * Math.PI * 2 + rand() * 0.3;
+                // Skip scallops on the bright upper-left side so rim stays clean
+                const onShadowSide = Math.cos(a - 0.6) > 0;
+                if (!onShadowSide) continue;
+                const scr = 1.5 + rand() * 1.8;
+                const ex = cx + Math.cos(a) * (rx - scr * 0.15) + sway * 0.3;
+                const ey = cy + Math.sin(a) * (ry - scr * 0.15);
+                ctx.beginPath();
+                ctx.arc(ex, ey, scr, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    },
+
+    // Garden plot / plinth — every building sits on a framed decorative tile
+    // Includes: tan stone border, bright lawn plate, small plants for variation
+    _plinth(ctx, sx, sy, size, seed) {
+        const scale = size || 1;
+        const hw = 26 + (scale - 1) * 22;
+        const hd = hw * 0.5;
+        const rng = this._seededRandom((seed || 0) * 7919 + 13);
+
+        ctx.save();
+
+        // --- OUTER STONE/SAND BORDER (tan walkway) — opaque to create clear boundary ---
+        const stoneG = ctx.createLinearGradient(sx, sy - hd, sx, sy + hd);
+        stoneG.addColorStop(0, '#d8c8a0');
+        stoneG.addColorStop(1, '#b8a88a');
+        ctx.fillStyle = stoneG;
+        this._tileDiamond(ctx, sx, sy, hw * 2.0, hd * 2.0);
+        ctx.fill();
+
+        // --- Dashed stone pattern on border (cobble texture) ---
+        ctx.strokeStyle = 'rgba(130,110,80,0.45)';
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([3, 2]);
+        this._tileDiamond(ctx, sx, sy, hw * 1.88, hd * 1.88);
+        ctx.stroke();
+        this._tileDiamond(ctx, sx, sy, hw * 1.98, hd * 1.98);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // --- INNER BRIGHT LAWN PLATE (manicured yard) ---
+        const lawnG = ctx.createLinearGradient(sx - hw, sy, sx + hw, sy);
+        lawnG.addColorStop(0, '#7cc85a');
+        lawnG.addColorStop(0.5, '#8ad464');
+        lawnG.addColorStop(1, '#6ab848');
+        ctx.fillStyle = lawnG;
+        this._tileDiamond(ctx, sx, sy, hw * 1.72, hd * 1.72);
+        ctx.fill();
+
+        // --- Crisp outer silhouette outline (Township-style cartoon edge) ---
+        ctx.strokeStyle = 'rgba(55,40,20,0.55)';
+        ctx.lineWidth = 1.0;
+        this._tileDiamond(ctx, sx, sy, hw * 2.0, hd * 2.0);
+        ctx.stroke();
+
+        // --- Darker edge between stone border and lawn (inner shadow line) ---
+        ctx.strokeStyle = 'rgba(80,60,30,0.4)';
+        ctx.lineWidth = 0.8;
+        this._tileDiamond(ctx, sx, sy, hw * 1.72, hd * 1.72);
+        ctx.stroke();
+
+        // --- Subtle grass detail: darker speckles on lawn for texture ---
+        ctx.save();
+        this._tileDiamond(ctx, sx, sy, hw * 1.72, hd * 1.72);
+        ctx.clip();
+        for (let s = 0; s < 6; s++) {
+            const dx = sx + (rng() - 0.5) * hw * 1.4;
+            const dy = sy + (rng() - 0.5) * hd * 1.4;
+            ctx.fillStyle = `rgba(${40 + Math.floor(rng()*20)},${120 + Math.floor(rng()*30)},${35},${0.25 + rng() * 0.15})`;
+            ctx.beginPath();
+            ctx.ellipse(dx, dy, 2 + rng() * 2, 1.2 + rng() * 1, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        // Sunward highlight patch on lawn
+        ctx.fillStyle = 'rgba(255,250,200,0.18)';
+        ctx.beginPath();
+        ctx.ellipse(sx - hw * 0.35, sy - hd * 0.45, hw * 0.65, hd * 0.4, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // --- Decorative corner plants (bushes/flowers) ---
+        // Place 2-4 plants at corners not overlapping with building center
+        const cornerSlots = [
+            { x: -hw * 0.78, y: +hd * 0.15 },  // left
+            { x: +hw * 0.78, y: -hd * 0.15 },  // right
+            { x: -hw * 0.15, y: +hd * 0.78 },  // front
+            { x: +hw * 0.15, y: -hd * 0.78 },  // back
+        ];
+        const plantCount = 2 + Math.floor(rng() * 3); // 2-4 plants
+        for (let i = 0; i < Math.min(plantCount, cornerSlots.length); i++) {
+            const slot = cornerSlots[(i + Math.floor(rng() * 4)) % 4];
+            const px = sx + slot.x + (rng() - 0.5) * 2;
+            const py = sy + slot.y + (rng() - 0.5) * 1;
+            const plantType = rng();
+            if (plantType < 0.4) {
+                // Small bush
+                const bushG = ctx.createRadialGradient(px - 0.5, py - 1, 0, px, py, 3);
+                bushG.addColorStop(0, '#6ac848');
+                bushG.addColorStop(1, '#3a8a28');
+                ctx.fillStyle = bushG;
+                ctx.beginPath();
+                ctx.ellipse(px, py, 2.5 + rng() * 0.8, 1.8 + rng() * 0.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Shadow under bush
+                ctx.fillStyle = 'rgba(20,40,15,0.25)';
+                ctx.beginPath();
+                ctx.ellipse(px, py + 1.5, 2.2, 0.6, 0, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (plantType < 0.75) {
+                // Flower cluster (red/orange/yellow)
+                const colors = ['#e85a3a', '#f0a830', '#e8c838', '#e870a0', '#f05858'];
+                const col = colors[Math.floor(rng() * colors.length)];
+                // Stem
+                ctx.strokeStyle = 'rgba(50,100,40,0.7)';
+                ctx.lineWidth = 0.5;
+                ctx.beginPath(); ctx.moveTo(px, py + 0.5); ctx.lineTo(px, py - 1.5); ctx.stroke();
+                // Petals
+                ctx.fillStyle = col;
+                ctx.beginPath();
+                ctx.arc(px, py - 2, 1.4, 0, Math.PI * 2);
+                ctx.fill();
+                // Center dot
+                ctx.fillStyle = '#f8e048';
+                ctx.beginPath();
+                ctx.arc(px, py - 2, 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                // Small stone/rock
+                ctx.fillStyle = 'rgba(120,115,100,0.7)';
+                ctx.beginPath();
+                ctx.ellipse(px, py, 1.8, 1.1, rng() * Math.PI, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(180,175,160,0.6)';
+                ctx.beginPath();
+                ctx.ellipse(px - 0.4, py - 0.4, 1.0, 0.6, rng() * Math.PI, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        ctx.restore();
+    },
+
+    // Contact / ambient occlusion at building base — dark gradient where walls meet ground
+    _contactAO(ctx, sx, sy, hw, hd) {
+        const g = ctx.createRadialGradient(sx, sy, hw * 0.15, sx, sy, hw * 1.05);
+        g.addColorStop(0, 'rgba(0,0,0,0.22)');
+        g.addColorStop(0.5, 'rgba(0,0,0,0.10)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, hw * 1.05, hd * 1.05, 0, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    // Rim / specular highlight on a sunward edge (top-left)
+    // Draws a bright line along two edges of a box silhouette
+    _rimHighlight(ctx, sx, sy, hw, hd, h) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,250,230,0.45)';
+        ctx.lineWidth = 1.2;
+        ctx.lineCap = 'round';
+        // Top-left ridge (left edge of top diamond)
+        ctx.beginPath();
+        ctx.moveTo(sx - hw, sy - h);
+        ctx.lineTo(sx, sy - hd - h);
+        ctx.stroke();
+        // Left wall top edge — dimmer
+        ctx.strokeStyle = 'rgba(255,250,230,0.22)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(sx - hw, sy);
+        ctx.lineTo(sx - hw, sy - h);
+        ctx.stroke();
+        ctx.restore();
+    },
+
+    // Township-style shingle overlay for hip/gable roofs — draws rows of tile lines
+    _shingleOverlay(ctx, sx, sy, hw, hd, baseH, roofH, overhang) {
+        const ow = hw + overhang;
+        const od = hd + overhang * 0.5;
+        const by = sy - baseH;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(30,15,5,0.22)';
+        ctx.lineWidth = 0.45;
+        // Left slope: rows parallel to eave
+        const rows = 4;
+        for (let r = 1; r < rows; r++) {
+            const t = r / rows;
+            // Eave point
+            const ex = sx - ow * (1 - t);
+            const ey = by + 1 - ow * 0 - (1 - t) * 0 + t * 0; // Stays on eave
+            // Ridge point
+            const rx = sx - (ow * 0.05) * (1 - t);
+            const ry = by - roofH + (by + 1 - (by - roofH)) * t;
+            ctx.beginPath();
+            ctx.moveTo(sx - ow + (ow) * t, by + 1 - (hd * t));
+            ctx.lineTo(sx - ow * 0.05 + ow * 0.05 * t, by - roofH + (roofH - hd) * (1 - t) * 0 - roofH * t * 0);
+            ctx.stroke();
+        }
+        // Simpler approach: horizontal-ish tile row lines every few pixels on each slope
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(20,10,5,0.20)';
+        ctx.lineWidth = 0.5;
+        const layers = 3;
+        for (let L = 1; L <= layers; L++) {
+            const t = L / (layers + 1);
+            // Left slope row
+            const a1x = sx - ow * (1 - t * 0.4);
+            const a1y = by + 1 - (hd * t * 0.6);
+            const a2x = sx - ow * 0.05 * (1 - t);
+            const a2y = by - roofH * t - (roofH * (1 - t) * 0);
+            ctx.moveTo(a1x, a1y - roofH * t * 0.7);
+            ctx.lineTo(a2x, a2y);
+            // Right slope row (mirror)
+            ctx.moveTo(sx + ow * (1 - t * 0.4), by + 1 - (hd * t * 0.6) - roofH * t * 0.7);
+            ctx.lineTo(sx + ow * 0.05 * (1 - t), by - roofH * t);
+        }
+        ctx.stroke();
+
+        // Bright ridge cap line
+        ctx.strokeStyle = 'rgba(255,240,200,0.35)';
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(sx - ow * 0.1, by - roofH + 0.3);
+        ctx.lineTo(sx + ow * 0.1, by - roofH + 0.3);
+        ctx.stroke();
+        ctx.restore();
+    },
+
+    // Reusable chimney with animated smoke (Township-style)
+    _chimneySmoke(ctx, cx, cy, chH, anim, color) {
+        const bodyCol = color || '#7a4a30';
+        // Chimney body
+        ctx.fillStyle = this._darken(bodyCol.startsWith('#') ? bodyCol : '#7a4a30', 30);
+        ctx.fillRect(cx - 1.6, cy - chH, 3.2, chH);
+        ctx.fillStyle = bodyCol;
+        ctx.fillRect(cx - 1.4, cy - chH, 2.8, chH);
+        // Cap
+        ctx.fillStyle = '#302520';
+        ctx.fillRect(cx - 1.9, cy - chH - 1.2, 3.8, 1.4);
+        // Animated smoke puffs
+        for (let s = 0; s < 3; s++) {
+            const t = ((anim * 0.5 + s * 1.3) % 4) / 4;
+            const smx = cx + Math.sin(anim * 0.6 + s * 1.2) * (2 + t * 4);
+            const smy = cy - chH - 2 - t * 18;
+            const smr = 1.5 + t * 3;
+            ctx.fillStyle = `rgba(200,200,200,${0.35 - t * 0.30})`;
+            ctx.beginPath();
+            ctx.arc(smx, smy, smr, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = `rgba(230,230,230,${0.20 - t * 0.18})`;
+            ctx.beginPath();
+            ctx.arc(smx - 0.6, smy - 0.8, smr * 0.7, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    // Night-time window glow helper — draws warm yellow rect if "night" flag or always soft
+    // Kept for future day/night cycle; currently gives a subtle warm glint
+    _litWindow(ctx, x, y, w, h, seed) {
+        const rng = this._seededRandom(seed | 0);
+        const lit = rng() > 0.45;
+        if (lit) {
+            const g = ctx.createLinearGradient(x, y, x, y + h);
+            g.addColorStop(0, 'rgba(255,220,150,0.85)');
+            g.addColorStop(1, 'rgba(240,180,90,0.7)');
+            ctx.fillStyle = g;
+        } else {
+            ctx.fillStyle = 'rgba(90,120,150,0.55)';
+        }
+        ctx.fillRect(x, y, w, h);
+        // Frame
+        ctx.strokeStyle = 'rgba(40,25,15,0.6)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x, y, w, h);
+    },
+
+    // ==============================
     //  TERRAIN RENDERING
     // ==============================
     renderTile(ctx, x, y) {
@@ -2213,21 +2812,14 @@ const Renderer = {
         const tw = this.TW, th = this.TH;
         const tileType = Game.map.tiles[y * GameData.MAP_SIZE + x];
 
-        // Use sprites if loaded
+        // Use sprites if loaded — but skip for WATER & GRASS because the
+        // Kenney sprites have hard brown edges (creates visible tile grid) and
+        // are static.  Full canvas path looks significantly better for those.
         if (this.spritesLoaded) {
             switch (tileType) {
-                case GameData.TILE.GRASS:
-                    if (this._drawTerrainSprite(ctx, sx, sy, 'grass')) {
-                        this._addGrassDetails(ctx, sx, sy, x, y);
-                        return;
-                    }
-                    break;
                 case GameData.TILE.FOREST:
-                    if (this._drawTerrainSprite(ctx, sx, sy, 'grass')) return;
-                    break;
-                case GameData.TILE.WATER:
-                    if (this._drawTerrainSprite(ctx, sx, sy, 'water')) {
-                        this._addWaterEffects(ctx, sx, sy, x, y);
+                    if (this._drawTerrainSprite(ctx, sx, sy, 'grass')) {
+                        this._maskSpriteEdge(ctx, sx, sy);
                         return;
                     }
                     break;
@@ -2237,14 +2829,8 @@ const Renderer = {
                 case GameData.TILE.ROAD:
                     if (this._renderRoadWithSprites(ctx, sx, sy, x, y)) return;
                     break;
-                case GameData.TILE.FARMLAND:
-                    if (this._drawTerrainSprite(ctx, sx, sy, 'grass')) {
-                        this._addFarmlandOverlay(ctx, sx, sy, x, y);
-                        return;
-                    }
-                    break;
                 case GameData.TILE.BRIDGE:
-                    if (this._drawTerrainSprite(ctx, sx, sy, 'water')) return;
+                    // Use canvas water rendering for bridges (animated)
                     break;
             }
         }
@@ -2275,19 +2861,18 @@ const Renderer = {
         const rng = this._seededRandom(tx * 31 + ty * 17);
         const hw = tw / 2, hh = th / 2;
 
-        // --- Per-tile color variation (natural patchiness) ---
-        const hueShift = (rng() - 0.5) * 15;    // ±15 color variation
-        const valShift = (rng() - 0.5) * 12;     // ±12 brightness variation
+        // --- Per-tile color variation (subtle, so neighboring tiles blend) ---
+        const hueShift = (rng() - 0.5) * 7;     // ±7 (was ±15) — less patchwork
+        const valShift = (rng() - 0.5) * 5;      // ±5 (was ±12) — less brightness swing
         const baseR = Math.round(78 + hueShift * 0.3 + valShift);
         const baseG = Math.round(175 + hueShift + valShift);
         const baseB = Math.round(62 + hueShift * 0.2);
 
-        // --- Multi-stop gradient simulating sun angle (top-left light) ---
+        // --- Flatter gradient (Township-style even lighting, no hard corner) ---
         const g = ctx.createLinearGradient(sx - hw, sy - hh, sx + hw * 0.5, sy + hh * 0.5);
-        g.addColorStop(0, `rgb(${baseR + 18},${baseG + 22},${baseB + 8})`);
-        g.addColorStop(0.35, `rgb(${baseR + 8},${baseG + 12},${baseB + 4})`);
-        g.addColorStop(0.65, `rgb(${baseR},${baseG},${baseB})`);
-        g.addColorStop(1, `rgb(${Math.max(0, baseR - 12)},${Math.max(0, baseG - 15)},${Math.max(0, baseB - 8)})`);
+        g.addColorStop(0, `rgb(${baseR + 6},${baseG + 8},${baseB + 3})`);   // was +18,+22,+8
+        g.addColorStop(0.5, `rgb(${baseR},${baseG},${baseB})`);
+        g.addColorStop(1, `rgb(${Math.max(0, baseR - 4)},${Math.max(0, baseG - 5)},${Math.max(0, baseB - 2)})`);   // was -12,-15,-8
         this._tileDiamond(ctx, sx, sy, tw, th);
         ctx.fillStyle = g;
         ctx.fill();
@@ -2524,16 +3109,17 @@ const Renderer = {
         ctx.fillStyle = `rgb(${r},${g},${b})`;
         ctx.fillRect(sx - hw, sy - hh, tw, th);
 
-        // Layered wave ripples (3 layers for depth)
+        // Layered wave ripples (3 layers for depth) — bumped alpha so ripples
+        // actually read at normal game zoom.
         for (let layer = 0; layer < 3; layer++) {
             const speed = 0.8 + layer * 0.5;
             const amp = 2 + layer * 0.8;
             const freq = 0.25 + layer * 0.1;
-            const alpha = 0.08 - layer * 0.02;
-            const bright = layer === 0 ? 200 : (layer === 1 ? 180 : 160);
+            const alpha = 0.28 - layer * 0.06;
+            const bright = layer === 0 ? 230 : (layer === 1 ? 210 : 190);
 
-            ctx.strokeStyle = `rgba(${bright},${bright + 30},255,${alpha + w1 * 0.02})`;
-            ctx.lineWidth = 1.2 - layer * 0.3;
+            ctx.strokeStyle = `rgba(${bright},${bright + 20},255,${alpha + w1 * 0.03})`;
+            ctx.lineWidth = 1.4 - layer * 0.3;
             ctx.beginPath();
             for (let i = -hw; i <= hw; i += 2) {
                 const waveY = Math.sin(t * speed + i * freq + tx + layer * 2) * amp;
@@ -2543,6 +3129,50 @@ const Renderer = {
                 else ctx.lineTo(px, py);
             }
             ctx.stroke();
+        }
+
+        // Occasional lily pad (Township-style pond detail) — only in shallower
+        // water so it doesn't clutter deep ocean tiles.
+        if (depth < 0.5) {
+            const padRng = this._seededRandom(tx * 311 + ty * 457);
+            if (padRng() > 0.78) {
+                const pxOff = (padRng() - 0.5) * tw * 0.6;
+                const pyOff = (padRng() - 0.5) * th * 0.5;
+                const bob = Math.sin(t * 0.9 + tx * 0.7) * 0.6;
+                const px = sx + pxOff, py = sy + pyOff + bob;
+                // Pad shadow
+                ctx.fillStyle = 'rgba(0,40,30,0.18)';
+                ctx.beginPath();
+                ctx.ellipse(px + 1, py + 1.5, 4.8, 1.7, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Pad body
+                const padG = ctx.createRadialGradient(px - 1, py - 0.5, 0.5, px, py, 4.5);
+                padG.addColorStop(0, '#7bb356');
+                padG.addColorStop(1, '#3b7a34');
+                ctx.fillStyle = padG;
+                ctx.beginPath();
+                ctx.ellipse(px, py, 4.5, 1.6, 0, 0.3, Math.PI * 2);
+                ctx.fill();
+                // Pad notch (the classic lily pad wedge)
+                ctx.fillStyle = `rgb(${r},${g},${b})`;
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(px + 3.5, py - 0.3);
+                ctx.lineTo(px + 3.5, py + 0.3);
+                ctx.closePath();
+                ctx.fill();
+                // Flower bud on some pads
+                if (padRng() > 0.5) {
+                    ctx.fillStyle = '#ffe8f0';
+                    ctx.beginPath();
+                    ctx.ellipse(px - 1, py - 1, 1.1, 0.9, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#ff9fb8';
+                    ctx.beginPath();
+                    ctx.arc(px - 1, py - 1, 0.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
         }
 
         // Light caustics (dancing light patches underwater)
@@ -2561,12 +3191,12 @@ const Renderer = {
             ctx.fill();
         }
 
-        // Main specular reflection (sun glint)
+        // Main specular reflection (sun glint) — much brighter & larger
         const glintX = sx + w1 * 5 - 2;
         const glintY = sy - 1 + w2 * 2;
-        const glintR = 5 + w3 * 1.5;
-        const glintAlpha = 0.12 + w3 * 0.05;
-        ctx.fillStyle = `rgba(255,255,255,${glintAlpha})`;
+        const glintR = 6 + w3 * 2;
+        const glintAlpha = 0.32 + w3 * 0.08;
+        ctx.fillStyle = `rgba(255,250,220,${glintAlpha})`;
         ctx.beginPath();
         ctx.ellipse(glintX, glintY, glintR, glintR * 0.35, 0.4 + w1 * 0.1, 0, Math.PI * 2);
         ctx.fill();
@@ -2891,6 +3521,21 @@ const Renderer = {
             ctx.lineWidth = 1;
             ctx.globalCompositeOperation = 'source-over';
 
+            // --- Universal per-instance seed (consistent per tile coord) ---
+            // Used by helpers/renderers to randomize minor details per instance
+            this._buildingSeed = (x * 2654435761 + y * 40503 + building.id.length * 97) >>> 0;
+
+            // --- Universal PRE-draw layers (Township-style framing) ---
+            // Skip for tile-type and ground-level buildings that draw their own ground
+            const bHeight = bData.height || 0;
+            const SKIP_PLINTH_IDS = { sawah: 1, ladang: 1, perkebunan: 1, perikanan: 1,
+                                       taman: 1, taman_besar: 1, jembatan: 1, tol: 1, bandara: 1 };
+            const skipPlinth = bData.isTile || SKIP_PLINTH_IDS[building.id] || bHeight < 5;
+            if (!skipPlinth) {
+                this._softShadow(ctx, sx, sy, bData.size || 1, bHeight);
+                this._plinth(ctx, sx, sy, bData.size || 1, this._buildingSeed);
+            }
+
             // Dispatch to specific renderer
             switch (building.id) {
                 case 'rumah_transmigran': this._drawRumahTransmigran(ctx, sx, sy, progress); break;
@@ -2921,7 +3566,8 @@ const Renderer = {
                 case 'bandara': this._drawBandara(ctx, sx, sy, progress); break;
                 case 'tol': this._drawTol(ctx, sx, sy, progress); break;
                 case 'pembangkit': this._drawPembangkit(ctx, sx, sy, progress); break;
-                case 'instalasi_air': this._drawInstalasi(ctx, sx, sy, progress); break;
+                case 'pdam': this._drawInstalasi(ctx, sx, sy, progress); break;
+                case 'menara_telkom': this._drawMenaraTelkom(ctx, sx, sy, progress); break;
                 case 'rumah_sakit': this._drawRumahSakit(ctx, sx, sy, progress); break;
                 case 'hotel': this._drawHotel(ctx, sx, sy, progress); break;
                 case 'stasiun': this._drawStasiun(ctx, sx, sy, progress); break;
@@ -3906,105 +4552,414 @@ const Renderer = {
         }
     },
 
-    // --- SAWAH (Rice Paddy) ---
+    // --- SAWAH (Rice Paddy) — Hay Day / Stardew style ---
     _drawSawah(ctx, sx, sy, p) {
         if (p < 1) return;
         const anim = this.animTime || 0;
 
-        // --- Pematang (mud embankment border) ---
-        ctx.fillStyle = '#9a7a48';
+        // Per-instance deterministic seed so each tile picks a growth stage
+        // and decoration set. Falls back to position when no building seed.
+        const seed = this._buildingSeed || (sx * 311 + sy * 457);
+        const rng = this._seededRandom(seed);
+        // Pick growth stage based on seed:
+        //   0 = flooded-seedling (biru dominan, padi kecil)
+        //   1 = young-green (hijau muda padat)
+        //   2 = mature-green (hijau tua, blade jelas)
+        //   3 = golden-harvest (kuning emas, siap panen)
+        const roll = rng();
+        const stage = roll < 0.22 ? 0
+                    : roll < 0.52 ? 1
+                    : roll < 0.80 ? 2
+                    : 3;
+
+        // Stage-dependent palette for rice plants
+        const PAL = [
+            { // flooded-seedling — sparse, air biru dominan
+                stem: [80, 150, 80], tip: [140, 200, 140],
+                density: 0.7, height: 2.2, grain: null, waterTint: 0.45,
+                groundTint: null, // keep water blue
+                plantGap: 3.0,
+            },
+            { // young-green — cukup padat
+                stem: [72, 180, 82], tip: [150, 230, 120],
+                density: 0.98, height: 3.4, grain: null, waterTint: 0.2,
+                groundTint: [95, 175, 90, 0.55], // hijau overlay on water
+                plantGap: 2.4,
+            },
+            { // mature-green — padat lebat
+                stem: [58, 150, 55], tip: [110, 200, 70],
+                density: 1.0, height: 4.5, grain: null, waterTint: 0.1,
+                groundTint: [68, 140, 55, 0.78], // hijau tua menutupi air
+                plantGap: 2.0,
+            },
+            { // golden harvest — lantai kuning penuh padi
+                stem: [195, 175, 68], tip: [238, 215, 100],
+                density: 1.0, height: 5.2, grain: [240, 205, 85],
+                waterTint: 0.05,
+                groundTint: [210, 180, 70, 0.88], // kuning emas menutupi air
+                plantGap: 1.9,
+            },
+        ];
+        const pal = PAL[stage];
+
+        // ============================================================
+        // 1. PEMATANG (embankment) — thicker with proper depth & shadow
+        // ============================================================
+        // Outer shadow band (directional: sun upper-left → shadow lower-right)
+        const shadowGrad = ctx.createLinearGradient(sx - 28, sy - 14, sx + 28, sy + 14);
+        shadowGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        shadowGrad.addColorStop(0.6, 'rgba(0,0,0,0)');
+        shadowGrad.addColorStop(1, 'rgba(0,0,0,0.22)');
+        ctx.fillStyle = shadowGrad;
+        this._tileDiamond(ctx, sx + 1, sy + 1.5, 60, 30);
+        ctx.fill();
+
+        // Main pematang mud (with top-down gradient for cylindrical feel)
+        const mudGrad = ctx.createLinearGradient(sx, sy - 15, sx, sy + 15);
+        mudGrad.addColorStop(0, '#b08a54');
+        mudGrad.addColorStop(0.5, '#9a7448');
+        mudGrad.addColorStop(1, '#755432');
+        ctx.fillStyle = mudGrad;
         this._tileDiamond(ctx, sx, sy, 58, 29);
         ctx.fill();
 
-        // Inner paddy area (water)
-        const waterGrad = ctx.createLinearGradient(sx - 24, sy, sx + 24, sy);
-        waterGrad.addColorStop(0, 'rgba(70,140,120,0.35)');
-        waterGrad.addColorStop(0.5, 'rgba(90,160,140,0.4)');
-        waterGrad.addColorStop(1, 'rgba(60,130,110,0.3)');
+        // Little grass tufts growing on pematang ridges (4 corners + edges)
+        const tuftSpots = [
+            { x: sx - 26, y: sy - 0.5 }, { x: sx + 26, y: sy + 0.5 },
+            { x: sx,      y: sy - 13.5 }, { x: sx,      y: sy + 13.5 },
+            { x: sx - 13, y: sy - 7.5 }, { x: sx + 13, y: sy + 7.5 },
+            { x: sx + 13, y: sy - 7.5 }, { x: sx - 13, y: sy + 7.5 },
+        ];
+        for (const t of tuftSpots) {
+            if (rng() > 0.55) continue;
+            ctx.fillStyle = `rgb(${70 + Math.floor(rng() * 25)},${140 + Math.floor(rng() * 35)},${50})`;
+            ctx.beginPath();
+            ctx.ellipse(t.x, t.y, 1.8, 0.9, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // 2-3 tiny blades
+            ctx.strokeStyle = 'rgba(90,160,70,0.75)';
+            ctx.lineWidth = 0.4;
+            for (let b = 0; b < 3; b++) {
+                const bx = t.x + (rng() - 0.5) * 2.5;
+                ctx.beginPath();
+                ctx.moveTo(bx, t.y);
+                ctx.lineTo(bx + (rng() - 0.5) * 0.8, t.y - 1.3 - rng() * 0.8);
+                ctx.stroke();
+            }
+        }
+
+        // ============================================================
+        // 2. WATER — reflective paddy surface
+        // ============================================================
+        // Water base: blue-green gradient with reflected sky tint
+        const waterGrad = ctx.createLinearGradient(sx - 24, sy - 12, sx + 24, sy + 12);
+        const wR = Math.round(60 + pal.waterTint * 40);
+        const wG = Math.round(140 + pal.waterTint * 30);
+        const wB = Math.round(170 - pal.waterTint * 30);
+        waterGrad.addColorStop(0, `rgb(${wR - 15},${wG - 10},${wB + 5})`);
+        waterGrad.addColorStop(0.5, `rgb(${wR + 10},${wG + 15},${wB - 5})`);
+        waterGrad.addColorStop(1, `rgb(${wR - 20},${wG - 20},${wB - 15})`);
         ctx.fillStyle = waterGrad;
         this._tileDiamond(ctx, sx, sy, 52, 26);
         ctx.fill();
 
-        // Water shimmer / ripples
-        for (let r = 0; r < 3; r++) {
-            const rx = sx - 10 + r * 12 + Math.sin(anim * 0.6 + r) * 2;
-            const ry = sy - 3 + r * 3;
-            ctx.fillStyle = `rgba(180,220,255,${0.06 + Math.sin(anim * 1.5 + r * 2) * 0.03})`;
+        // Reflected sky — soft blue radial patch upper-left (matches game sun)
+        const skyReflect = ctx.createRadialGradient(sx - 8, sy - 6, 1, sx - 8, sy - 6, 14);
+        skyReflect.addColorStop(0, 'rgba(180,215,240,0.28)');
+        skyReflect.addColorStop(1, 'rgba(180,215,240,0)');
+        ctx.fillStyle = skyReflect;
+        ctx.save();
+        this._tileDiamond(ctx, sx, sy, 52, 26);
+        ctx.clip();
+        ctx.fillRect(sx - 26, sy - 14, 52, 28);
+        ctx.restore();
+
+        // Sun glint (small bright elongated highlight, shimmering)
+        // Only visible when water is actually showing (seedling stage).
+        if (stage === 0) {
+            const glintA = 0.22 + Math.sin(anim * 1.6) * 0.08;
+            ctx.fillStyle = `rgba(255,248,210,${glintA})`;
             ctx.beginPath();
-            ctx.ellipse(rx, ry, 6, 2, 0.2, 0, Math.PI * 2);
+            ctx.ellipse(sx - 10 + Math.sin(anim * 0.9) * 1.2, sy - 4, 4.5, 0.8, 0.2, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // --- Rice seedlings in staggered rows ---
-        const growth = (Math.sin(anim * 0.15) + 1) * 0.5; // slow cycle
-        for (let r = -3; r <= 3; r++) {
-            for (let c = -2; c <= 2; c++) {
-                const rx = sx + r * 6 + c * 1.5;
-                const ry = sy + c * 4 + r * 1.8;
-                // Skip if outside diamond
-                if (Math.abs(rx - sx) / 25 + Math.abs(ry - sy) / 13 > 1) continue;
-                const h = 3 + growth * 4;
-                const sway = Math.sin(anim * 0.7 + r * 0.8 + c * 0.5) * 0.6;
-                // Stem
-                const green = Math.floor(130 + growth * 60);
-                ctx.strokeStyle = `rgb(${70 + Math.floor(growth * 40)},${green},${35})`;
-                ctx.lineWidth = 0.6;
+        // GROUND TINT — for young/mature/harvest stages, overlay dense crop
+        // color over the water so blue doesn't dominate. This is the key fix
+        // so "padi menguning" reads as yellow, not bluish.
+        if (pal.groundTint) {
+            const [gr, gg, gb, ga] = pal.groundTint;
+            const tintGrad = ctx.createLinearGradient(sx - 24, sy - 12, sx + 24, sy + 12);
+            tintGrad.addColorStop(0, `rgba(${gr - 10},${gg - 8},${gb - 5},${ga})`);
+            tintGrad.addColorStop(0.5, `rgba(${gr},${gg},${gb},${ga})`);
+            tintGrad.addColorStop(1, `rgba(${gr - 25},${gg - 20},${gb - 15},${ga})`);
+            ctx.fillStyle = tintGrad;
+            this._tileDiamond(ctx, sx, sy, 52, 26);
+            ctx.fill();
+
+            // Furrow/row texture — diagonal lines to suggest planted rows
+            ctx.save();
+            this._tileDiamond(ctx, sx, sy, 51, 25.5);
+            ctx.clip();
+            ctx.strokeStyle = `rgba(${Math.floor(gr * 0.7)},${Math.floor(gg * 0.7)},${Math.floor(gb * 0.6)},0.35)`;
+            ctx.lineWidth = 0.5;
+            for (let k = -14; k <= 14; k += 3) {
                 ctx.beginPath();
-                ctx.moveTo(rx, ry);
-                ctx.quadraticCurveTo(rx + sway * 0.5, ry - h * 0.5, rx + sway, ry - h);
+                ctx.moveTo(sx - 26, sy + k);
+                ctx.lineTo(sx + 26, sy + k + 5);
                 ctx.stroke();
-                // Leaf tip (blade of rice)
-                if (growth > 0.3) {
-                    ctx.strokeStyle = `rgb(${80 + Math.floor(growth * 50)},${green + 10},${30})`;
-                    ctx.lineWidth = 0.4;
+            }
+            ctx.restore();
+        }
+
+        // Ripples — a few curved arcs that drift
+        ctx.save();
+        this._tileDiamond(ctx, sx, sy, 51, 25.5);
+        ctx.clip();
+        for (let r = 0; r < 4; r++) {
+            const phase = anim * 0.5 + r * 1.3;
+            const rx = sx + Math.sin(phase + r) * 8;
+            const ry = sy - 5 + r * 3 + Math.cos(phase) * 0.6;
+            const rad = 3 + (phase % 3);
+            ctx.strokeStyle = `rgba(220,240,255,${0.10 + Math.sin(phase * 2) * 0.06})`;
+            ctx.lineWidth = 0.55;
+            ctx.beginPath();
+            ctx.arc(rx, ry, rad, -0.3, Math.PI + 0.3);
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // ============================================================
+        // 3. FISH (ikan mas) — occasional glimmer under water
+        // ============================================================
+        if (stage < 2 && rng() > 0.65) {
+            const fishX = sx + (rng() - 0.5) * 20;
+            const fishY = sy + (rng() - 0.5) * 10;
+            const drift = Math.sin(anim * 0.8 + fishX * 0.1) * 2;
+            ctx.save();
+            this._tileDiamond(ctx, sx, sy, 50, 25);
+            ctx.clip();
+            ctx.fillStyle = 'rgba(255,165,80,0.5)';
+            ctx.beginPath();
+            ctx.ellipse(fishX + drift, fishY, 2.2, 0.8, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,220,160,0.5)';
+            ctx.beginPath();
+            ctx.ellipse(fishX + drift - 0.3, fishY - 0.3, 1.2, 0.4, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // ============================================================
+        // 4. RICE PLANTS — dense staggered clumps (nearly full coverage for
+        //    mature & harvest stages so ground color reads clearly)
+        // ============================================================
+        const plantGap = pal.plantGap;
+        const rowStep = plantGap * 0.85;
+        for (let ry = -12; ry <= 12; ry += rowStep) {
+            const rowWiggle = ((ry * 0.37) % 1) * 1.5;
+            // Offset every other row for staggered planting (real paddy rows)
+            const rowOffset = (Math.floor(ry / rowStep) % 2) * (plantGap * 0.5);
+            for (let rx = -24; rx <= 24; rx += plantGap) {
+                const px = sx + rx + rowWiggle + rowOffset;
+                const py = sy + ry + Math.sin(rx * 0.12) * 0.35;
+                // Inside diamond check
+                if (Math.abs(px - sx) / 25 + Math.abs(py - sy) / 12.5 > 0.98) continue;
+                // Skip some for organic density
+                if (rng() > pal.density) continue;
+
+                const sway = Math.sin(anim * 0.9 + rx * 0.18 + ry * 0.2) * 0.9;
+                const clumpH = pal.height + (rng() - 0.5) * 0.9;
+
+                // Clump silhouette (base pad) — bigger for denser look
+                ctx.fillStyle = `rgba(${pal.stem[0]},${pal.stem[1]},${pal.stem[2]},0.95)`;
+                ctx.beginPath();
+                ctx.ellipse(px, py - 0.3, 1.8, 0.75, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Blade count scales with stage: more mature = more blades
+                const bladeCount = stage === 0 ? 3 : stage === 1 ? 4 : 5;
+                for (let b = 0; b < bladeCount; b++) {
+                    const bOff = (b - (bladeCount - 1) / 2) * 0.75;
+                    const bH = clumpH * (0.75 + rng() * 0.45);
+                    const bSway = sway + (b - bladeCount / 2) * 0.22;
+                    ctx.strokeStyle = `rgb(${pal.stem[0] + Math.floor(rng() * 18)},${pal.stem[1] + Math.floor(rng() * 22)},${pal.stem[2] + Math.floor(rng() * 10)})`;
+                    ctx.lineWidth = 0.7;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.moveTo(rx + sway, ry - h);
-                    ctx.lineTo(rx + sway + 1.5, ry - h - 1.5);
+                    ctx.moveTo(px + bOff, py - 0.2);
+                    ctx.quadraticCurveTo(px + bOff + bSway * 0.5, py - bH * 0.5, px + bOff + bSway, py - bH);
                     ctx.stroke();
+
+                    // Blade tip highlight
+                    if (stage >= 1) {
+                        ctx.strokeStyle = `rgba(${pal.tip[0]},${pal.tip[1]},${pal.tip[2]},0.88)`;
+                        ctx.lineWidth = 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(px + bOff + bSway * 0.9, py - bH * 0.95);
+                        ctx.lineTo(px + bOff + bSway + 1.0, py - bH - 0.9);
+                        ctx.stroke();
+                    }
                 }
-                // Rice grain cluster (when mature)
-                if (growth > 0.7 && ((r + c) % 2 === 0)) {
-                    ctx.fillStyle = `rgba(220,200,100,${0.4 + growth * 0.3})`;
+
+                // Golden grain head on harvest stage — a PROMINENT drooping
+                // cluster on top of every clump so yellow dominates visually.
+                if (pal.grain) {
+                    const ghX = px + sway * 0.9;
+                    const ghY = py - clumpH + 0.2;
+                    // Droop direction (right-down)
+                    for (let g = 0; g < 5; g++) {
+                        const gAng = 0.3 + g * 0.28;
+                        const gD = g * 0.55;
+                        const gx = ghX + Math.cos(gAng) * gD;
+                        const gy = ghY + Math.sin(gAng) * gD * 0.7;
+                        // Darker grains at tip, brighter near stem
+                        const lum = 1 - g * 0.08;
+                        ctx.fillStyle = `rgb(${Math.round(pal.grain[0] * lum)},${Math.round(pal.grain[1] * lum)},${Math.round(pal.grain[2] * lum)})`;
+                        ctx.beginPath();
+                        ctx.ellipse(gx, gy, 1.0, 0.55, gAng, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    // Bright highlight dot on top grain (sun-kissed)
+                    ctx.fillStyle = 'rgba(255,245,180,0.7)';
                     ctx.beginPath();
-                    ctx.arc(rx + sway + 0.5, ry - h + 0.5, 1, 0, Math.PI * 2);
+                    ctx.arc(ghX + 0.2, ghY - 0.15, 0.4, 0, Math.PI * 2);
                     ctx.fill();
                 }
             }
         }
 
-        // --- Pematang texture (ridge lines) ---
-        ctx.strokeStyle = 'rgba(120,90,50,0.18)';
-        ctx.lineWidth = 0.6;
-        this._tileDiamond(ctx, sx, sy, 55, 27.5);
-        ctx.stroke();
+        // ============================================================
+        // 5. BANGAU (heron) — 40% chance in flooded/young stages
+        // ============================================================
+        if (stage <= 1 && rng() > 0.6) {
+            const bx = sx + (rng() > 0.5 ? 10 : -10);
+            const by = sy + (rng() - 0.5) * 6;
+            const peck = Math.sin(anim * 0.8) > 0.85 ? 1 : 0;
 
-        // --- Farmer figure (small) ---
-        const farmerX = sx + 8, farmerY = sy - 1;
-        const farmerBob = Math.sin(anim * 1.5) * 0.5;
-        // Hat (topi caping)
-        ctx.fillStyle = '#c8b060';
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath();
+            ctx.ellipse(bx + 0.5, by + 0.8, 2.5, 0.6, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Legs (thin stilts in water)
+            ctx.strokeStyle = '#8a6030';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(bx - 0.8, by);
+            ctx.lineTo(bx - 0.6, by - 4);
+            ctx.moveTo(bx + 0.5, by);
+            ctx.lineTo(bx + 0.4, by - 4);
+            ctx.stroke();
+
+            // Body (white ellipse)
+            ctx.fillStyle = '#f4f1e8';
+            ctx.beginPath();
+            ctx.ellipse(bx, by - 4.5, 2.2, 1.3, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Body shadow (underside)
+            ctx.fillStyle = 'rgba(160,155,140,0.45)';
+            ctx.beginPath();
+            ctx.ellipse(bx, by - 4.1, 2, 0.55, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Neck — angled up when resting, down when pecking
+            ctx.strokeStyle = '#f4f1e8';
+            ctx.lineWidth = 1.4;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(bx + 0.5, by - 5);
+            if (peck) {
+                ctx.quadraticCurveTo(bx + 2, by - 4, bx + 2.8, by - 2.5);
+            } else {
+                ctx.quadraticCurveTo(bx + 2, by - 6, bx + 2.2, by - 7.5);
+            }
+            ctx.stroke();
+
+            // Head + beak
+            const hx = peck ? bx + 2.8 : bx + 2.2;
+            const hy = peck ? by - 2.5 : by - 7.5;
+            ctx.fillStyle = '#f4f1e8';
+            ctx.beginPath();
+            ctx.arc(hx, hy, 0.95, 0, Math.PI * 2);
+            ctx.fill();
+            // Yellow beak
+            ctx.strokeStyle = '#f0b040';
+            ctx.lineWidth = 0.55;
+            ctx.beginPath();
+            ctx.moveTo(hx + 0.7, hy);
+            ctx.lineTo(hx + 2.2, hy + (peck ? 0.5 : -0.2));
+            ctx.stroke();
+            // Black eye dot
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath();
+            ctx.arc(hx + 0.2, hy - 0.2, 0.25, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // ============================================================
+        // 6. HARVEST ELEMENTS — stacked rice sheaves & basket on harvest stage
+        // ============================================================
+        if (stage === 3 && rng() > 0.35) {
+            const sheafX = sx - 14, sheafY = sy + 3;
+            // Ground disc
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath();
+            ctx.ellipse(sheafX + 0.4, sheafY + 1, 3.2, 1, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Sheaf bundle (golden straw)
+            for (let s = 0; s < 7; s++) {
+                const ang = -Math.PI / 2 + (s - 3) * 0.18;
+                const sl = 4 + (s % 2 ? 0.3 : -0.3);
+                ctx.strokeStyle = `rgb(${210 - s * 3},${185 - s * 4},${95 - s * 3})`;
+                ctx.lineWidth = 0.75;
+                ctx.beginPath();
+                ctx.moveTo(sheafX, sheafY);
+                ctx.lineTo(sheafX + Math.cos(ang) * sl, sheafY + Math.sin(ang) * sl);
+                ctx.stroke();
+            }
+            // Binding rope
+            ctx.strokeStyle = '#8a5a28';
+            ctx.lineWidth = 0.55;
+            ctx.beginPath();
+            ctx.arc(sheafX, sheafY - 1.3, 1.4, 0, Math.PI * 2);
+            ctx.stroke();
+            // Grain head dots on top of sheaf
+            for (let g = 0; g < 5; g++) {
+                ctx.fillStyle = '#d8b558';
+                const ang = -Math.PI / 2 + (g - 2) * 0.2;
+                const sl = 4.3;
+                ctx.beginPath();
+                ctx.arc(sheafX + Math.cos(ang) * sl, sheafY + Math.sin(ang) * sl, 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // ============================================================
+        // 7. IRRIGATION CHANNEL (saluran air) — subtle blue notch
+        // ============================================================
+        ctx.strokeStyle = 'rgba(80,150,180,0.45)';
+        ctx.lineWidth = 1.3;
         ctx.beginPath();
-        ctx.ellipse(farmerX, farmerY - 5 + farmerBob, 3, 1.2, 0, 0, Math.PI * 2);
+        ctx.moveTo(sx - 27, sy + 2);
+        ctx.lineTo(sx - 22, sy - 0.5);
+        ctx.stroke();
+        // Glimmer in channel
+        ctx.fillStyle = 'rgba(220,240,255,0.3)';
+        ctx.beginPath();
+        ctx.arc(sx - 24.5 + Math.sin(anim * 1.2) * 0.4, sy + 0.75, 0.5, 0, Math.PI * 2);
         ctx.fill();
-        // Body
-        ctx.fillStyle = '#4080c0';
-        ctx.fillRect(farmerX - 1, farmerY - 3.5 + farmerBob, 2, 3);
-        // Legs
-        ctx.strokeStyle = '#6a4a2a';
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(farmerX - 0.5, farmerY - 0.5 + farmerBob);
-        ctx.lineTo(farmerX - 1, farmerY + 1);
-        ctx.moveTo(farmerX + 0.5, farmerY - 0.5 + farmerBob);
-        ctx.lineTo(farmerX + 1, farmerY + 1);
-        ctx.stroke();
 
-        // --- Irrigation channel (saluran air) ---
-        ctx.strokeStyle = 'rgba(60,120,160,0.25)';
-        ctx.lineWidth = 1.5;
+        // ============================================================
+        // 8. Pematang inner edge highlight (catches sun)
+        // ============================================================
+        ctx.strokeStyle = 'rgba(255,230,180,0.22)';
+        ctx.lineWidth = 0.7;
         ctx.beginPath();
-        ctx.moveTo(sx - 26, sy + 1);
-        ctx.lineTo(sx - 20, sy - 2);
+        // Upper-left edge of inner water diamond (lit by sun)
+        ctx.moveTo(sx - 26, sy);
+        ctx.lineTo(sx, sy - 13);
         ctx.stroke();
     },
 
@@ -5099,218 +6054,1021 @@ const Renderer = {
     },
 
     // --- SEKOLAH DASAR (Elementary School, 2x2) — world-class detail ---
+    // ===============================================================
+    //  SEKOLAH DASAR — Township-style, 2-story with bell tower
+    // ===============================================================
     _drawSekolah(ctx, sx, sy, p) {
-        const hw = 36, hd = 18, h = 28 * p;
+        const hw = 34, hd = 17;                // main footprint
+        const h = 26 * p;                       // ground+upper floor height
         const anim = this.animTime || 0;
-        this._shadow(ctx, sx, sy, 46, 26);
+        const seed = this._buildingSeed || 12345;
 
-        // ── Schoolyard (lapangan): grass + dirt track ─────────────────────
-        ctx.fillStyle = '#6ab848';
-        this._tileDiamond(ctx, sx, sy, 80, 40);
-        ctx.fill();
-        // Central playing field (dirt)
-        ctx.fillStyle = '#c0a870';
+        // =====================================================
+        //  SCHOOLYARD GROUND (sand-colored play area)
+        //  Drawn on top of the universal plinth lawn
+        // =====================================================
+        // Sandy play area in front of entrance (warm beige diamond)
+        ctx.save();
+        const sandG = ctx.createLinearGradient(sx - 20, sy + 4, sx + 20, sy + 24);
+        sandG.addColorStop(0, '#e8d8a8');
+        sandG.addColorStop(1, '#c8b888');
+        ctx.fillStyle = sandG;
         ctx.beginPath();
-        ctx.moveTo(sx + 10, sy - 5); ctx.lineTo(sx + 36, sy + 9);
-        ctx.lineTo(sx + 10, sy + 23); ctx.lineTo(sx - 16, sy + 9);
+        ctx.moveTo(sx + 8,  sy - 2);
+        ctx.lineTo(sx + 32, sy + 10);
+        ctx.lineTo(sx + 8,  sy + 22);
+        ctx.lineTo(sx - 18, sy + 10);
         ctx.closePath(); ctx.fill();
-        // Field line
-        ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 0.5;
+        // Sand edge outline
+        ctx.strokeStyle = 'rgba(130,110,70,0.55)';
+        ctx.lineWidth = 0.7; ctx.stroke();
+        // Court lines (basketball half-court style)
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 0.6;
         ctx.beginPath();
-        ctx.moveTo(sx + 10, sy - 1); ctx.lineTo(sx + 10, sy + 19);
-        ctx.moveTo(sx - 4, sy + 9); ctx.lineTo(sx + 24, sy + 9);
+        ctx.moveTo(sx + 7, sy + 10); ctx.lineTo(sx + 32, sy + 10);
+        ctx.moveTo(sx + 8, sy + 2); ctx.lineTo(sx + 8, sy + 22);
         ctx.stroke();
-
-        // ── Boundary wall / pagar ─────────────────────────────────────────
-        if (p > 0.2) {
-            ctx.strokeStyle = '#a09080'; ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(sx - hw, sy); ctx.lineTo(sx - hw, sy - 4);
-            ctx.lineTo(sx + hw, sy - 4 + hd);
-            ctx.stroke();
-            // Gate posts
-            ctx.fillStyle = '#d0c8b0';
-            ctx.fillRect(sx - 8, sy - 3 - hd * 0.5, 2.5, 6);
-            ctx.fillRect(sx + 5, sy - 3 - hd * 0.5 + 4, 2.5, 6);
-        }
-
-        // ── Foundation ───────────────────────────────────────────────────
-        this._box(ctx, sx, sy, hw + 3, hd + 1.5, 3,
-            '#c8c0b0', ['#b8b0a0','#a8a090'], ['#989080','#888070']);
-
-        // ── Main building: cream/white with blue trim ──────────────────────
-        const lwG = ctx.createLinearGradient(sx - hw, sy - 3, sx, sy - 3);
-        lwG.addColorStop(0, '#f0e8d0'); lwG.addColorStop(1, '#f8f0e0');
-        ctx.fillStyle = lwG;
+        // Free-throw semicircle
         ctx.beginPath();
-        ctx.moveTo(sx - hw, sy - 3); ctx.lineTo(sx - hw, sy - 3 - h);
-        ctx.lineTo(sx, sy - hd - 3 - h); ctx.lineTo(sx, sy - hd - 3);
+        ctx.ellipse(sx + 14, sy + 10, 5, 2.5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        // =====================================================
+        //  FOUNDATION — Concrete plinth under main building
+        // =====================================================
+        this._box(ctx, sx, sy, hw + 3, hd + 1.5, 3.5,
+            '#d4cab6', ['#c4baa6', '#b4aa98'], ['#a4987f', '#948870']);
+
+        // =====================================================
+        //  MAIN BUILDING BODY (2-story effect via band in middle)
+        //  Ground floor — bright white
+        // =====================================================
+        const foundTop = sy - 3.5;
+        const floor1H = h * 0.48;
+        const floor2H = h * 0.52;
+
+        // Ground floor walls: crisp white with soft cream gradient
+        const lw1 = ctx.createLinearGradient(sx - hw, foundTop, sx, foundTop);
+        lw1.addColorStop(0, '#f8f2e2'); lw1.addColorStop(1, '#fdf8ea');
+        ctx.fillStyle = lw1;
+        ctx.beginPath();
+        ctx.moveTo(sx - hw, foundTop); ctx.lineTo(sx - hw, foundTop - floor1H);
+        ctx.lineTo(sx,      foundTop - hd - floor1H); ctx.lineTo(sx, foundTop - hd);
         ctx.closePath(); ctx.fill();
-        const rwG = ctx.createLinearGradient(sx, sy - 3, sx + hw, sy - 3);
-        rwG.addColorStop(0, '#e8e0c8'); rwG.addColorStop(1, '#d8d0b8');
-        ctx.fillStyle = rwG;
+        const rw1 = ctx.createLinearGradient(sx, foundTop, sx + hw, foundTop);
+        rw1.addColorStop(0, '#f0e8d4'); rw1.addColorStop(1, '#dcd2b8');
+        ctx.fillStyle = rw1;
         ctx.beginPath();
-        ctx.moveTo(sx + hw, sy - 3); ctx.lineTo(sx + hw, sy - 3 - h);
-        ctx.lineTo(sx, sy - hd - 3 - h); ctx.lineTo(sx, sy - hd - 3);
-        ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#f5edd8';
-        ctx.beginPath();
-        ctx.moveTo(sx, sy - hd - 3 - h); ctx.lineTo(sx + hw, sy - 3 - h);
-        ctx.lineTo(sx, sy + hd - 3 - h); ctx.lineTo(sx - hw, sy - 3 - h);
+        ctx.moveTo(sx + hw, foundTop); ctx.lineTo(sx + hw, foundTop - floor1H);
+        ctx.lineTo(sx,      foundTop - hd - floor1H); ctx.lineTo(sx, foundTop - hd);
         ctx.closePath(); ctx.fill();
 
-        // ── Blue accent plinth / base molding ────────────────────────────
-        if (p > 0.3) {
-            ctx.fillStyle = '#2060a8';
-            ctx.beginPath();
-            ctx.moveTo(sx - hw, sy - 3 + hd - 3); ctx.lineTo(sx, sy - 3 - 3);
-            ctx.lineTo(sx, sy - 3 - 5); ctx.lineTo(sx - hw, sy - 3 + hd - 5);
-            ctx.closePath(); ctx.fill();
-            ctx.fillStyle = '#1a5098';
-            ctx.beginPath();
-            ctx.moveTo(sx + hw, sy - 3 + hd - 3); ctx.lineTo(sx, sy - 3 - 3);
-            ctx.lineTo(sx, sy - 3 - 5); ctx.lineTo(sx + hw, sy - 3 + hd - 5);
-            ctx.closePath(); ctx.fill();
-        }
+        // Dark maroon skirting (base painted band, Indonesian school style)
+        ctx.fillStyle = '#7a2818';
+        ctx.beginPath();
+        ctx.moveTo(sx - hw, foundTop); ctx.lineTo(sx - hw, foundTop - 2.2);
+        ctx.lineTo(sx,      foundTop - hd - 2.2); ctx.lineTo(sx, foundTop - hd);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#661d10';
+        ctx.beginPath();
+        ctx.moveTo(sx + hw, foundTop); ctx.lineTo(sx + hw, foundTop - 2.2);
+        ctx.lineTo(sx,      foundTop - hd - 2.2); ctx.lineTo(sx, foundTop - hd);
+        ctx.closePath(); ctx.fill();
 
-        // ── Roof (clay tiles, deep red-brown) ────────────────────────────
-        if (p > 0.2) {
-            this._hipRoof(ctx, sx, sy - 3, hw, hd, h, 13 * p, 7,
-                '#b83020', '#982010', '#d04030');
-            // Ridge cap white
-            ctx.fillStyle = '#e8e0d0';
-            ctx.fillRect(sx - 3, sy - 3 - hd - h - 13 * p - 1, 6, 2);
-            // Roof underside (visible overhang shade)
-            ctx.fillStyle = 'rgba(80,40,20,0.15)';
-            ctx.beginPath();
-            ctx.moveTo(sx - hw, sy - 3 - h); ctx.lineTo(sx - hw - 4, sy - 3 - h + 2);
-            ctx.lineTo(sx, sy - hd - 3 - h + 2); ctx.lineTo(sx, sy - hd - 3 - h);
-            ctx.closePath(); ctx.fill();
-        }
-
-        // ── Windows: large, school-style with bars ────────────────────────
+        // Mid-floor horizontal band (concrete separator)
         if (p > 0.35) {
-            for (let i = 0; i < 4; i++) {
-                const wx = hw * (0.14 + i * 0.23);
-                const wy = h * 0.48;
-                this._windowL(ctx, sx, sy - 3, wx, wy, 5, 7.5);
-                this._windowR(ctx, sx, sy - 3, wx, wy, 5, 7.5);
-                // Window bars (teralis)
-                const lwxPos = sx - hw + wx * 0.65;
-                const lwyPos = sy - 3 + hd * (1 - wx / hw) - wy;
-                ctx.strokeStyle = 'rgba(70,50,30,0.35)'; ctx.lineWidth = 0.4;
-                for (let b = 0; b < 3; b++) {
-                    ctx.beginPath(); ctx.moveTo(lwxPos - 2 + b * 1.8, lwyPos - 7); ctx.lineTo(lwxPos - 2 + b * 1.8, lwyPos); ctx.stroke();
-                }
-                // Flower pot on sill
-                if (i % 2 === 0) {
-                    ctx.fillStyle = '#c85020';
-                    ctx.fillRect(lwxPos - 1.5, lwyPos + 0.5, 3, 1.5);
-                    ctx.fillStyle = '#50c040';
-                    ctx.beginPath(); ctx.arc(lwxPos, lwyPos - 0.5, 1.5, Math.PI, 0); ctx.fill();
-                }
-            }
-        }
-
-        // ── Front entrance: teras with pillars ────────────────────────────
-        if (p > 0.5) {
-            // Portico base
-            ctx.fillStyle = '#d0c8b0';
-            ctx.fillRect(sx - 12, sy - 3 - hd * 0.6 - h * 0.6, 24, 3);
-            // Pillars (4)
-            const pillH = h * 0.65;
-            for (let pi = -1; pi <= 1; pi += 2) {
-                const px = sx + pi * 8;
-                const py = sy - 3 - hd * (pi < 0 ? 0.08 : 0.1);
-                ctx.fillStyle = '#e8e0d0';
-                ctx.fillRect(px - 1.5, py - pillH, 3, pillH);
-                ctx.fillStyle = 'rgba(255,255,255,0.3)';
-                ctx.fillRect(px - 1, py - pillH, 0.8, pillH);
-                ctx.fillStyle = '#c8c0b0';
-                ctx.fillRect(px - 2, py - pillH, 4, 2);
-                ctx.fillRect(px - 2, py - 2, 4, 2);
-            }
-            // Canopy/portico roof (red)
-            ctx.fillStyle = '#c03020';
+            ctx.fillStyle = '#b83838';
             ctx.beginPath();
-            ctx.moveTo(sx - 13, sy - 3 - hd * 0.08 - pillH);
-            ctx.lineTo(sx + 13, sy - 3 - hd * 0.1 - pillH);
-            ctx.lineTo(sx + 10, sy - 3 - hd * 0.1 - pillH - 5);
-            ctx.lineTo(sx, sy - 3 - hd * 0.09 - pillH - 7);
-            ctx.lineTo(sx - 10, sy - 3 - hd * 0.08 - pillH - 5);
+            ctx.moveTo(sx - hw, foundTop - floor1H);
+            ctx.lineTo(sx - hw, foundTop - floor1H - 1.8);
+            ctx.lineTo(sx,      foundTop - hd - floor1H - 1.8);
+            ctx.lineTo(sx,      foundTop - hd - floor1H);
             ctx.closePath(); ctx.fill();
-            // Doors
-            this._door(ctx, sx - 6, sy - 3 - hd * 0.08, 4.5, 11, '#5a3010');
-            this._door(ctx, sx + 1, sy - 3 - hd * 0.08, 4.5, 11, '#4a2800');
-        }
-
-        // ── Indonesian flag + flagpole ────────────────────────────────────
-        if (p >= 1) {
-            // Concrete base
-            ctx.fillStyle = '#c0c0c0'; ctx.fillRect(sx - hw - 2, sy - 3 + hd - 1, 5, 2);
-            ctx.strokeStyle = '#808080'; ctx.lineWidth = 1.5;
+            ctx.fillStyle = '#982828';
             ctx.beginPath();
-            ctx.moveTo(sx - hw, sy - 3 + hd - 1);
-            ctx.lineTo(sx - hw, sy - 3 + hd - 36);
-            ctx.stroke();
-            // Gold tip
-            ctx.fillStyle = '#d8a020';
-            ctx.beginPath(); ctx.arc(sx - hw, sy - 3 + hd - 37, 1.8, 0, Math.PI * 2); ctx.fill();
-            // Flag (animated slight wave)
-            const wave = Math.sin(anim * 2) * 1.2;
-            ctx.fillStyle = '#dc1414';
-            ctx.beginPath();
-            ctx.moveTo(sx - hw + 1, sy - 3 + hd - 36);
-            ctx.quadraticCurveTo(sx - hw + 7, sy - 3 + hd - 36 + wave, sx - hw + 13, sy - 3 + hd - 36);
-            ctx.lineTo(sx - hw + 13, sy - 3 + hd - 32);
-            ctx.quadraticCurveTo(sx - hw + 7, sy - 3 + hd - 32 + wave, sx - hw + 1, sy - 3 + hd - 32);
+            ctx.moveTo(sx + hw, foundTop - floor1H);
+            ctx.lineTo(sx + hw, foundTop - floor1H - 1.8);
+            ctx.lineTo(sx,      foundTop - hd - floor1H - 1.8);
+            ctx.lineTo(sx,      foundTop - hd - floor1H);
             ctx.closePath(); ctx.fill();
-            ctx.fillStyle = '#f8f8f8';
+            // Thin light highlight on top of band
+            ctx.fillStyle = 'rgba(255,220,200,0.4)';
             ctx.beginPath();
-            ctx.moveTo(sx - hw + 1, sy - 3 + hd - 32);
-            ctx.quadraticCurveTo(sx - hw + 7, sy - 3 + hd - 32 + wave, sx - hw + 13, sy - 3 + hd - 32);
-            ctx.lineTo(sx - hw + 13, sy - 3 + hd - 28);
-            ctx.quadraticCurveTo(sx - hw + 7, sy - 3 + hd - 28 + wave, sx - hw + 1, sy - 3 + hd - 28);
+            ctx.moveTo(sx - hw, foundTop - floor1H - 1.8);
+            ctx.lineTo(sx,      foundTop - hd - floor1H - 1.8);
+            ctx.lineTo(sx + hw, foundTop - floor1H - 1.8);
+            ctx.lineTo(sx,      foundTop - hd - floor1H - 2.2);
             ctx.closePath(); ctx.fill();
         }
 
-        // ── Sign "SD NEGERI" ──────────────────────────────────────────────
-        if (p >= 1) {
-            ctx.fillStyle = '#1848a0';
-            ctx.fillRect(sx - 18, sy - 3 - hd * 0.6 - h + 4, 36, 7);
+        // Upper floor walls (slightly warmer cream)
+        const upperBase = foundTop - floor1H - 1.8;
+        const lw2 = ctx.createLinearGradient(sx - hw, upperBase, sx, upperBase);
+        lw2.addColorStop(0, '#f4ecd4'); lw2.addColorStop(1, '#f9f3e0');
+        ctx.fillStyle = lw2;
+        ctx.beginPath();
+        ctx.moveTo(sx - hw, upperBase); ctx.lineTo(sx - hw, upperBase - floor2H);
+        ctx.lineTo(sx,      upperBase - hd - floor2H); ctx.lineTo(sx, upperBase - hd);
+        ctx.closePath(); ctx.fill();
+        const rw2 = ctx.createLinearGradient(sx, upperBase, sx + hw, upperBase);
+        rw2.addColorStop(0, '#ece3c8'); rw2.addColorStop(1, '#d8cfb2');
+        ctx.fillStyle = rw2;
+        ctx.beginPath();
+        ctx.moveTo(sx + hw, upperBase); ctx.lineTo(sx + hw, upperBase - floor2H);
+        ctx.lineTo(sx,      upperBase - hd - floor2H); ctx.lineTo(sx, upperBase - hd);
+        ctx.closePath(); ctx.fill();
+
+        // White pilasters (vertical pillars between windows) — on both walls
+        if (p > 0.4) {
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 4px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillText('SD NEGERI', sx, sy - 3 - hd * 0.6 - h + 9.5);
+            // Left wall pilasters (4): positions along the diagonal
+            for (let i = 0; i <= 4; i++) {
+                const t = i / 4;
+                const pcX = sx - hw + hw * t;
+                const pcY = foundTop - hd * t;
+                // Full-height column from foundTop down to roof eave
+                ctx.beginPath();
+                ctx.moveTo(pcX - 0.8, pcY);
+                ctx.lineTo(pcX - 0.8, pcY - h);
+                ctx.lineTo(pcX + 0.8, pcY - h);
+                ctx.lineTo(pcX + 0.8, pcY);
+                ctx.closePath(); ctx.fill();
+            }
+            // Right wall pilasters
+            for (let i = 0; i <= 4; i++) {
+                const t = i / 4;
+                const pcX = sx + hw * t;
+                const pcY = foundTop - hd * (1 - t);
+                ctx.beginPath();
+                ctx.moveTo(pcX - 0.8, pcY);
+                ctx.lineTo(pcX - 0.8, pcY - h);
+                ctx.lineTo(pcX + 0.8, pcY - h);
+                ctx.lineTo(pcX + 0.8, pcY);
+                ctx.closePath(); ctx.fill();
+            }
+            // Pilaster shadow (thin dark line right side)
+            ctx.strokeStyle = 'rgba(80,60,30,0.35)'; ctx.lineWidth = 0.4;
+            for (let i = 0; i <= 4; i++) {
+                const t = i / 4;
+                const pcX = sx - hw + hw * t;
+                const pcY = foundTop - hd * t;
+                ctx.beginPath();
+                ctx.moveTo(pcX + 0.8, pcY); ctx.lineTo(pcX + 0.8, pcY - h); ctx.stroke();
+            }
         }
 
-        // ── Children playing (animated) ───────────────────────────────────
-        if (p >= 1) {
-            // Bouncing ball
-            const ballY = sy + 18 + Math.abs(Math.sin(anim * 3.5)) * -5;
-            ctx.fillStyle = '#e84040';
-            ctx.beginPath(); ctx.arc(sx + 15, ballY, 2, 0, Math.PI * 2); ctx.fill();
-            // Two kids
-            const kidColors = ['#f0c870', '#d08040'];
-            for (let k = 0; k < 2; k++) {
-                const kx = sx + 8 + k * 12, ky = sy + 13 + k * 3;
-                const kleg = Math.sin(anim * 3 + k * Math.PI) * 1.5;
-                ctx.fillStyle = kidColors[k];
-                ctx.beginPath(); ctx.arc(kx, ky - 5, 1.8, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = ['#3060c0', '#c03030'][k];
-                ctx.fillRect(kx - 1.5, ky - 3.2, 3, 3.5);
-                ctx.strokeStyle = '#303030'; ctx.lineWidth = 0.8;
+        // =====================================================
+        //  WINDOWS — 4 large per floor per wall face (16 total)
+        //  Tall rectangular with blue frames + cross mullions
+        // =====================================================
+        if (p > 0.4) {
+            const drawSchoolWindow = (wx, wy, w, wh, wallSide) => {
+                // Outer dark frame (thicker)
+                ctx.fillStyle = '#2c5a90';
+                ctx.fillRect(wx - 0.5, wy - 0.5, w + 1, wh + 1);
+                // Glass with a sky-blue gradient
+                const g = ctx.createLinearGradient(wx, wy, wx + w, wy + wh);
+                const shade = wallSide === 'R' ? 0.85 : 1.0;
+                g.addColorStop(0, `rgba(${150*shade},${200*shade},${230*shade},0.92)`);
+                g.addColorStop(0.5, `rgba(${195*shade},${225*shade},${245*shade},0.95)`);
+                g.addColorStop(1, `rgba(${135*shade},${180*shade},${210*shade},0.9)`);
+                ctx.fillStyle = g; ctx.fillRect(wx, wy, w, wh);
+                // Cross mullion (white)
+                ctx.fillStyle = '#f8f4e8';
+                ctx.fillRect(wx, wy + wh * 0.5 - 0.4, w, 0.8);        // horizontal
+                ctx.fillRect(wx + w * 0.5 - 0.4, wy, 0.8, wh);         // vertical
+                // White outer frame (stile/rail)
+                ctx.strokeStyle = '#f8f4e8'; ctx.lineWidth = 0.6;
+                ctx.strokeRect(wx + 0.3, wy + 0.3, w - 0.6, wh - 0.6);
+                // Specular hotspot on glass
+                ctx.fillStyle = 'rgba(255,255,255,0.35)';
+                ctx.fillRect(wx + 0.8, wy + 0.8, w * 0.35, wh * 0.35);
+                // Window ledge below
+                ctx.fillStyle = '#d4ccb4';
+                ctx.fillRect(wx - 0.8, wy + wh, w + 1.6, 0.6);
+            };
+
+            // Left wall windows (4 per floor × 2 floors)
+            const winWL = 4.4, winHF1 = floor1H * 0.62, winHF2 = floor2H * 0.62;
+            for (let i = 0; i < 4; i++) {
+                const t = (i + 0.5) / 4;
+                const baseX = sx - hw + hw * t;
+                const baseY = foundTop - hd * t;
+                // Skip windows at entrance area (center-ish of left wall)
+                if (i >= 1 && i <= 2) continue;
+                // Floor 1
+                const wxF1 = baseX - winWL * 0.5;
+                const wyF1 = baseY - floor1H * 0.85;
+                drawSchoolWindow(wxF1, wyF1, winWL, winHF1, 'L');
+                // Floor 2
+                const wyF2 = upperBase - hd * t - floor2H * 0.85;
+                drawSchoolWindow(wxF1, wyF2, winWL, winHF2, 'L');
+            }
+            // Right wall — all 4 bays have windows both floors (no entrance on right)
+            for (let i = 0; i < 4; i++) {
+                const t = (i + 0.5) / 4;
+                const baseX = sx + hw * t;
+                const baseY = foundTop - hd * (1 - t);
+                const wxF1 = baseX - winWL * 0.5;
+                const wyF1 = baseY - floor1H * 0.85;
+                drawSchoolWindow(wxF1, wyF1, winWL, winHF1, 'R');
+                const wyF2 = upperBase - hd * (1 - t) - floor2H * 0.85;
+                drawSchoolWindow(wxF1, wyF2, winWL, winHF2, 'R');
+            }
+
+            // Flower boxes under a few ground-floor windows (Township detail)
+            const flowerCols = ['#e85848', '#f2a828', '#e868a8', '#f0d020'];
+            for (let i = 0; i < 4; i++) {
+                const t = (i + 0.5) / 4;
+                // Right wall, every other window
+                if (i % 2 === 0) {
+                    const baseX = sx + hw * t;
+                    const baseY = foundTop - hd * (1 - t) - floor1H * 0.18;
+                    ctx.fillStyle = '#6a3a18';
+                    ctx.fillRect(baseX - 2.5, baseY, 5, 1.6);
+                    ctx.fillStyle = '#4a2810';
+                    ctx.fillRect(baseX - 2.5, baseY + 1.2, 5, 0.4);
+                    // Flowers
+                    for (let f = 0; f < 3; f++) {
+                        ctx.fillStyle = flowerCols[(i + f + Math.floor(seed/100)) % 4];
+                        ctx.beginPath();
+                        ctx.arc(baseX - 1.8 + f * 1.8, baseY - 0.4, 0.9, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+        }
+
+        // (Entrance portico is drawn AFTER the roof — see below — so pediment+sign
+        //  project forward in front of the hip roof silhouette, not behind it.)
+
+        // =====================================================
+        //  MAIN HIP ROOF — red clay tiles with ornate ridge
+        // =====================================================
+        const mainRoofH = 9 * p;
+        if (p > 0.2) {
+            this._hipRoof(ctx, sx, foundTop, hw, hd, h, mainRoofH, 3,
+                '#c03424', '#9a2818', '#d84030');
+
+            // Gutter line at eaves (dark brown trough)
+            ctx.strokeStyle = 'rgba(60,30,10,0.65)';
+            ctx.lineWidth = 0.9;
+            ctx.beginPath();
+            ctx.moveTo(sx - hw - 4.5, foundTop - h + 0.5);
+            ctx.lineTo(sx,            foundTop - hd - h + 0.5);
+            ctx.lineTo(sx + hw + 4.5, foundTop - h + 0.5);
+            ctx.stroke();
+            // Downspout on right-front corner
+            ctx.strokeStyle = '#5a3010'; ctx.lineWidth = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(sx + hw + 2, foundTop - h + 0.8);
+            ctx.lineTo(sx + hw + 2, foundTop + 1);
+            ctx.stroke();
+
+            // Decorative ridge ornaments (pyramid peaks)
+            const roofPeak = foundTop - hd - h - mainRoofH;
+            ctx.fillStyle = '#d89838';
+            ctx.beginPath();
+            ctx.moveTo(sx - 2, roofPeak + 0.5);
+            ctx.lineTo(sx,     roofPeak - 2);
+            ctx.lineTo(sx + 2, roofPeak + 0.5);
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = 'rgba(100,60,10,0.6)'; ctx.lineWidth = 0.3; ctx.stroke();
+        }
+
+        // =====================================================
+        //  BELL TOWER at rear-center — rises above main roof
+        //  Has a clock face + open belfry + copper dome
+        // =====================================================
+        if (p > 0.6) {
+            const twX = sx - 1, twY = foundTop - hd * 0.92;
+            const twBaseH = h + mainRoofH * 0.6;
+            const twHw = 5.5, twHd = 3.2;
+
+            // Tower body (cream, above roof)
+            this._box(ctx, twX, twY, twHw, twHd, twBaseH * 0.7,
+                '#f8f2e2', ['#ece3c8','#d8ceb0'], ['#d0c4a4','#b8ac8c']);
+
+            // Clock face on front
+            const clkX = twX + twHw * 0.02, clkY = twY - twBaseH * 0.58;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(clkX, clkY, 2.6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.45;
+            ctx.stroke();
+            // Clock ticks
+            for (let t = 0; t < 12; t++) {
+                const ang = (t * Math.PI) / 6;
+                const len = (t % 3 === 0) ? 0.7 : 0.35;
                 ctx.beginPath();
-                ctx.moveTo(kx, ky + 0.3); ctx.lineTo(kx - 1.5 + kleg, ky + 3);
-                ctx.moveTo(kx, ky + 0.3); ctx.lineTo(kx + 1.5 - kleg, ky + 3);
+                ctx.moveTo(clkX + Math.cos(ang) * (2.3 - len), clkY + Math.sin(ang) * (2.3 - len));
+                ctx.lineTo(clkX + Math.cos(ang) * 2.3, clkY + Math.sin(ang) * 2.3);
                 ctx.stroke();
             }
+            // Clock hands (slow animation — hour=seed, minute=anim)
+            const hourAng = ((seed % 12) / 12) * Math.PI * 2 - Math.PI / 2;
+            const minAng = (anim * 0.08) - Math.PI / 2;
+            ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 0.8;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(clkX, clkY);
+            ctx.lineTo(clkX + Math.cos(hourAng) * 1.3, clkY + Math.sin(hourAng) * 1.3);
+            ctx.stroke();
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(clkX, clkY);
+            ctx.lineTo(clkX + Math.cos(minAng) * 1.8, clkY + Math.sin(minAng) * 1.8);
+            ctx.stroke();
+            ctx.lineCap = 'butt';
+            // Center pivot dot
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath(); ctx.arc(clkX, clkY, 0.35, 0, Math.PI * 2); ctx.fill();
+
+            // Belfry (open arched section above the body)
+            const belfryY = twY - twBaseH * 0.7;
+            ctx.fillStyle = '#e8dfc4';
+            ctx.fillRect(twX - twHw, belfryY - 5, twHw * 2, 5);
+            // Dark openings (two arches)
+            ctx.fillStyle = '#201810';
+            ctx.beginPath();
+            ctx.arc(twX - 2, belfryY - 1.5, 1.3, Math.PI, 0);
+            ctx.fill();
+            ctx.fillRect(twX - 2 - 1.3, belfryY - 1.5, 2.6, 1.5);
+            ctx.beginPath();
+            ctx.arc(twX + 2, belfryY - 1.5, 1.3, Math.PI, 0);
+            ctx.fill();
+            ctx.fillRect(twX + 2 - 1.3, belfryY - 1.5, 2.6, 1.5);
+            // Bells visible inside arches (bronze bells, animated swing)
+            const swing = Math.sin(anim * 2.2) * 0.4;
+            for (let b = 0; b < 2; b++) {
+                const bX = twX - 2 + b * 4 + swing;
+                const bY = belfryY - 2;
+                ctx.fillStyle = '#a87028';
+                ctx.beginPath();
+                ctx.arc(bX, bY, 0.8, 0, Math.PI);
+                ctx.fill();
+                ctx.fillRect(bX - 0.8, bY - 1, 1.6, 1);
+                // Bell clapper swing
+                ctx.strokeStyle = '#3a2010'; ctx.lineWidth = 0.3;
+                ctx.beginPath();
+                ctx.moveTo(bX, bY - 1); ctx.lineTo(bX + swing * 2, bY + 0.3);
+                ctx.stroke();
+            }
+            // Top frame of belfry
+            ctx.fillStyle = '#a82818';
+            ctx.fillRect(twX - twHw - 0.5, belfryY - 5, twHw * 2 + 1, 1);
+
+            // Copper dome roof on tower
+            const domeX = twX, domeY = belfryY - 5;
+            const domeG = ctx.createRadialGradient(domeX - 1, domeY - 2, 0, domeX, domeY - 2, 4);
+            domeG.addColorStop(0, '#70b898');
+            domeG.addColorStop(0.6, '#4a9078');
+            domeG.addColorStop(1, '#2a6058');
+            ctx.fillStyle = domeG;
+            ctx.beginPath();
+            ctx.arc(domeX, domeY, 4, Math.PI, 0);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(20,40,30,0.5)'; ctx.lineWidth = 0.4;
+            ctx.stroke();
+            // Dome highlight
+            ctx.fillStyle = 'rgba(200,230,220,0.4)';
+            ctx.beginPath();
+            ctx.arc(domeX - 1.2, domeY - 1.8, 1.2, Math.PI, Math.PI * 1.7);
+            ctx.fill();
+            // Spire + flagtip
+            ctx.strokeStyle = '#3a2818'; ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            ctx.moveTo(domeX, domeY - 4);
+            ctx.lineTo(domeX, domeY - 9);
+            ctx.stroke();
+            ctx.fillStyle = '#d89838';
+            ctx.beginPath();
+            ctx.arc(domeX, domeY - 9, 0.9, 0, Math.PI * 2);
+            ctx.fill();
         }
 
-        // ── Trees ─────────────────────────────────────────────────────────
-        if (p >= 1) {
-            this._treeSmall(ctx, sx - hw + 2, sy - 1, 9, '#5a3a1a', '#3a9030');
-            this._treeSmall(ctx, sx + hw + 8, sy - 5, 9, '#4a3010', '#42aa38');
-            this._treeSmall(ctx, sx - hw - 3, sy + hd - 2, 7, '#5a3818', '#38a030');
+        // =====================================================
+        //  FRONT ENTRANCE PORTICO — drawn AFTER roof so it projects forward
+        //  Located on the LEFT wall (front-facing in isometric view)
+        // =====================================================
+        if (p > 0.45) {
+            // Entrance anchor — on front face (left wall), slightly right of center
+            // In isometric, left wall runs from (sx-hw, sy) top-left back to (sx, sy+hd) front
+            // The "front-most" point on left wall is (sx, sy+hd). We place entrance ~40% along.
+            const eT = 0.55;                                  // 0=back, 1=front corner
+            const eBaseX = sx - hw + hw * eT;                 // X on left-wall line
+            const eBaseY = foundTop - hd * (1 - eT) + hd * 0; // Y projected up from ground line
+            // Actually we want the entry's BOTTOM on the ground at foundTop - hd*(1-eT)
+            const eX = eBaseX + 2;   // nudge toward viewer
+            const eY = foundTop + hd * eT * 0.1;  // at ground level in front of wall
+
+            // Portico roof extends HIGHER than eave so it projects above main roof silhouette
+            const pillH = floor1H * 1.45;        // column height (ground + beam above eave)
+            const porticoHalfW = 11;             // half-width of portico
+            const porticoHalfD = 4;              // depth toward viewer
+
+            // --- Stone steps (3 steps descending forward toward viewer) ---
+            ctx.fillStyle = '#c8c0b0';
+            for (let s = 0; s < 3; s++) {
+                const stepW = porticoHalfW - s * 0.8;
+                const stepD = porticoHalfD * 0.9;
+                const yOff = s * 1.2;
+                const stepTopY = eY + yOff;
+                // Step top (diamond)
+                ctx.beginPath();
+                ctx.moveTo(eX - stepW,      stepTopY - stepD * 0.4);
+                ctx.lineTo(eX + stepW * 0.7, stepTopY + stepD * 0.3);
+                ctx.lineTo(eX - stepW * 0.3, stepTopY + stepD);
+                ctx.lineTo(eX - stepW * 2,   stepTopY + stepD * 0.3);
+                ctx.closePath();
+                const stepG = ctx.createLinearGradient(eX, stepTopY - stepD, eX, stepTopY + stepD);
+                stepG.addColorStop(0, s === 0 ? '#eadcbc' : '#d8cbac');
+                stepG.addColorStop(1, '#a89878');
+                ctx.fillStyle = stepG;
+                ctx.fill();
+                // Step face (darker front edge)
+                ctx.fillStyle = '#887868';
+                ctx.beginPath();
+                ctx.moveTo(eX + stepW * 0.7, stepTopY + stepD * 0.3);
+                ctx.lineTo(eX - stepW * 0.3, stepTopY + stepD);
+                ctx.lineTo(eX - stepW * 0.3, stepTopY + stepD + 1);
+                ctx.lineTo(eX + stepW * 0.7, stepTopY + stepD * 0.3 + 1);
+                ctx.closePath(); ctx.fill();
+                ctx.fillStyle = '#786858';
+                ctx.beginPath();
+                ctx.moveTo(eX - stepW * 0.3, stepTopY + stepD);
+                ctx.lineTo(eX - stepW * 2,   stepTopY + stepD * 0.3);
+                ctx.lineTo(eX - stepW * 2,   stepTopY + stepD * 0.3 + 1);
+                ctx.lineTo(eX - stepW * 0.3, stepTopY + stepD + 1);
+                ctx.closePath(); ctx.fill();
+                // Outline
+                ctx.strokeStyle = 'rgba(60,45,25,0.45)'; ctx.lineWidth = 0.4;
+                ctx.beginPath();
+                ctx.moveTo(eX - stepW,       stepTopY - stepD * 0.4);
+                ctx.lineTo(eX + stepW * 0.7, stepTopY + stepD * 0.3);
+                ctx.lineTo(eX - stepW * 0.3, stepTopY + stepD);
+                ctx.lineTo(eX - stepW * 2,   stepTopY + stepD * 0.3);
+                ctx.closePath();
+                ctx.stroke();
+            }
+
+            // --- Portico floor (upper landing, darker red tile) ---
+            const landingY = eY - 0.6;
+            ctx.fillStyle = '#8a2818';
+            ctx.beginPath();
+            ctx.moveTo(eX - porticoHalfW,      landingY - porticoHalfD * 0.4);
+            ctx.lineTo(eX + porticoHalfW * 0.7, landingY + porticoHalfD * 0.3);
+            ctx.lineTo(eX - porticoHalfW * 0.3, landingY + porticoHalfD);
+            ctx.lineTo(eX - porticoHalfW * 1.8, landingY + porticoHalfD * 0.3);
+            ctx.closePath(); ctx.fill();
+            // Tile pattern lines
+            ctx.strokeStyle = 'rgba(40,15,5,0.4)'; ctx.lineWidth = 0.3;
+            for (let tl = 1; tl < 4; tl++) {
+                const t = tl / 4;
+                ctx.beginPath();
+                ctx.moveTo(eX - porticoHalfW + (porticoHalfW * 1.7) * t, landingY - porticoHalfD * 0.4 + porticoHalfD * 0.7 * t);
+                ctx.lineTo(eX - porticoHalfW * 1.8 + (porticoHalfW * 1.5) * t, landingY + porticoHalfD * 0.3 + porticoHalfD * 0.7 * t);
+                ctx.stroke();
+            }
+
+            // --- Pillars (2 tall Tuscan-style columns at outer corners) ---
+            const pillarPositions = [
+                { x: eX - porticoHalfW + 1,       y: landingY - porticoHalfD * 0.38 },
+                { x: eX + porticoHalfW * 0.65,    y: landingY + porticoHalfD * 0.3 },
+            ];
+            for (const pc of pillarPositions) {
+                // Base plinth
+                ctx.fillStyle = '#c8bfa4';
+                ctx.fillRect(pc.x - 1.9, pc.y - 1.2, 3.8, 1.4);
+                ctx.fillStyle = '#a8a088';
+                ctx.fillRect(pc.x - 1.9, pc.y + 0.1, 3.8, 0.3);
+                // Shaft
+                const shaftG = ctx.createLinearGradient(pc.x - 1.6, 0, pc.x + 1.6, 0);
+                shaftG.addColorStop(0, '#ffffff');
+                shaftG.addColorStop(0.55, '#f4ecd4');
+                shaftG.addColorStop(1, '#c8bc9c');
+                ctx.fillStyle = shaftG;
+                ctx.fillRect(pc.x - 1.4, pc.y - pillH, 2.8, pillH - 1.2);
+                // Fluting lines (2 vertical grooves)
+                ctx.strokeStyle = 'rgba(120,100,70,0.3)'; ctx.lineWidth = 0.3;
+                ctx.beginPath();
+                ctx.moveTo(pc.x - 0.7, pc.y - pillH + 1.4);
+                ctx.lineTo(pc.x - 0.7, pc.y - 1.8);
+                ctx.moveTo(pc.x + 0.7, pc.y - pillH + 1.4);
+                ctx.lineTo(pc.x + 0.7, pc.y - 1.8);
+                ctx.stroke();
+                // Capital (wider top)
+                ctx.fillStyle = '#ece4ca';
+                ctx.fillRect(pc.x - 2.1, pc.y - pillH, 4.2, 1.7);
+                ctx.fillStyle = '#d4ccb0';
+                ctx.fillRect(pc.x - 2.1, pc.y - pillH + 1.4, 4.2, 0.4);
+                // Capital shadow line
+                ctx.strokeStyle = 'rgba(100,80,50,0.4)'; ctx.lineWidth = 0.3;
+                ctx.strokeRect(pc.x - 2.1, pc.y - pillH, 4.2, 1.7);
+            }
+
+            // --- Portico entablature (beam across pillars) ---
+            const beamY = landingY - pillH;
+            ctx.fillStyle = '#e8dfc4';
+            ctx.beginPath();
+            ctx.moveTo(eX - porticoHalfW + 1, beamY - porticoHalfD * 0.38);
+            ctx.lineTo(eX + porticoHalfW * 0.7, beamY + porticoHalfD * 0.3);
+            ctx.lineTo(eX + porticoHalfW * 0.7, beamY + porticoHalfD * 0.3 + 2);
+            ctx.lineTo(eX - porticoHalfW + 1, beamY - porticoHalfD * 0.38 + 2);
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = 'rgba(100,70,30,0.5)'; ctx.lineWidth = 0.5;
+            ctx.stroke();
+            // Beam shadow line below
+            ctx.fillStyle = 'rgba(80,50,20,0.3)';
+            ctx.fillRect(eX - porticoHalfW, beamY + 1.7, porticoHalfW * 1.6, 0.6);
+
+            // --- Small gable / pediment rising from beam (red clay tile) ---
+            // Base corners of the beam in isometric space
+            const pdLeftX  = eX - porticoHalfW + 1;
+            const pdLeftY  = beamY - porticoHalfD * 0.38;
+            const pdRightX = eX + porticoHalfW * 0.7;
+            const pdRightY = beamY + porticoHalfD * 0.3;
+            // Peak is directly ABOVE the midpoint of the tilted base line
+            const midBaseX = (pdLeftX + pdRightX) * 0.5;
+            const midBaseY = (pdLeftY + pdRightY) * 0.5;
+            const pmPeakX = midBaseX;
+            const pmPeakY = midBaseY - 14;
+
+            // Red pediment mass (slight thickness for 3D)
+            ctx.fillStyle = '#c83020';
+            ctx.beginPath();
+            ctx.moveTo(pdLeftX,       pdLeftY);
+            ctx.lineTo(pmPeakX,       pmPeakY);
+            ctx.lineTo(pdRightX,      pdRightY);
+            ctx.lineTo(pdRightX + 1,  pdRightY + 1.8);
+            ctx.lineTo(pmPeakX,       pmPeakY + 2);
+            ctx.lineTo(pdLeftX - 1,   pdLeftY + 1.8);
+            ctx.closePath(); ctx.fill();
+            // Cream tympanum (triangle face on front)
+            ctx.fillStyle = '#f8f0dc';
+            ctx.beginPath();
+            ctx.moveTo(pdLeftX - 1,   pdLeftY + 1.8);
+            ctx.lineTo(pmPeakX,       pmPeakY + 2);
+            ctx.lineTo(pdRightX + 1,  pdRightY + 1.8);
+            ctx.closePath(); ctx.fill();
+            // Tympanum outline
+            ctx.strokeStyle = 'rgba(60,35,15,0.55)'; ctx.lineWidth = 0.6;
+            ctx.stroke();
+            // Red roof outline
+            ctx.strokeStyle = 'rgba(80,20,10,0.65)'; ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            ctx.moveTo(pdLeftX, pdLeftY);
+            ctx.lineTo(pmPeakX, pmPeakY);
+            ctx.lineTo(pdRightX, pdRightY);
+            ctx.stroke();
+            // Shingle rows on both slopes of pediment
+            ctx.strokeStyle = 'rgba(40,12,5,0.35)'; ctx.lineWidth = 0.3;
+            for (let sh = 1; sh < 3; sh++) {
+                const t = sh / 3;
+                // Left slope: from pdLeft → pmPeak
+                ctx.beginPath();
+                ctx.moveTo(pdLeftX + (pmPeakX - pdLeftX) * t,
+                           pdLeftY + (pmPeakY - pdLeftY) * t);
+                ctx.lineTo(pdLeftX + 0.4 + (pmPeakX - pdLeftX - 0.2) * t,
+                           pdLeftY + 0.5 + (pmPeakY - pdLeftY - 0.3) * t);
+                ctx.stroke();
+                // Right slope: from pmPeak → pdRight
+                ctx.beginPath();
+                ctx.moveTo(pmPeakX + (pdRightX - pmPeakX) * t,
+                           pmPeakY + (pdRightY - pmPeakY) * t);
+                ctx.lineTo(pmPeakX + 0.2 + (pdRightX - pmPeakX - 0.2) * t,
+                           pmPeakY + 0.5 + (pdRightY - pmPeakY - 0.3) * t);
+                ctx.stroke();
+            }
+            // Apex ornament (gold finial)
+            ctx.fillStyle = '#d89838';
+            ctx.beginPath();
+            ctx.arc(pmPeakX, pmPeakY - 0.6, 1, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(100,60,10,0.6)'; ctx.lineWidth = 0.3;
+            ctx.stroke();
+            ctx.fillStyle = '#f8d868';
+            ctx.beginPath();
+            ctx.arc(pmPeakX - 0.3, pmPeakY - 0.9, 0.35, 0, Math.PI * 2);
+            ctx.fill();
+
+            // --- Garuda-style emblem in tympanum ---
+            const emX = pmPeakX, emY = pmPeakY + 0.8;
+            ctx.fillStyle = '#c48018';
+            // Stylized wing shape (simple 5-point star)
+            ctx.beginPath();
+            for (let a = 0; a < 10; a++) {
+                const ang = -Math.PI / 2 + a * (Math.PI / 5);
+                const r = (a % 2 === 0) ? 1.5 : 0.65;
+                const px = emX + Math.cos(ang) * r;
+                const py = emY + Math.sin(ang) * r * 0.85;
+                if (a === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = 'rgba(120,60,0,0.55)'; ctx.lineWidth = 0.2;
+            ctx.stroke();
+
+            // --- "SD NEGERI 01" sign board below beam (flat, readable) ---
+            if (p >= 0.85) {
+                // Center the sign on the portico's midline
+                const sgW = 16, sgH = 3.4;
+                const sgCx = (pdLeftX + pdRightX) * 0.5;
+                const sgCy = (pdLeftY + pdRightY) * 0.5 + 3.2;
+                const sgX = sgCx - sgW * 0.5;
+                const sgY = sgCy - sgH * 0.5;
+                // Shadow drop
+                ctx.fillStyle = 'rgba(0,0,0,0.25)';
+                ctx.fillRect(sgX + 0.4, sgY + 0.4, sgW, sgH);
+                // Board background (dark blue with subtle gradient)
+                const sgG = ctx.createLinearGradient(sgX, sgY, sgX, sgY + sgH);
+                sgG.addColorStop(0, '#1f4a92');
+                sgG.addColorStop(1, '#123070');
+                ctx.fillStyle = sgG;
+                ctx.fillRect(sgX, sgY, sgW, sgH);
+                // Gold double trim
+                ctx.strokeStyle = '#e8b048'; ctx.lineWidth = 0.5;
+                ctx.strokeRect(sgX + 0.2, sgY + 0.2, sgW - 0.4, sgH - 0.4);
+                ctx.strokeStyle = 'rgba(232,176,72,0.4)'; ctx.lineWidth = 0.3;
+                ctx.strokeRect(sgX + 0.7, sgY + 0.6, sgW - 1.4, sgH - 1.2);
+                // Text — yellow bold, centered
+                ctx.fillStyle = '#f8e048';
+                ctx.font = 'bold 2.4px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('SD NEGERI 01', sgCx, sgCy + 0.1);
+                ctx.textAlign = 'start';
+                ctx.textBaseline = 'alphabetic';
+                // Small mounting brackets (top)
+                ctx.fillStyle = '#8a6028';
+                ctx.fillRect(sgX + 2, sgY - 0.6, 0.6, 0.8);
+                ctx.fillRect(sgX + sgW - 2.6, sgY - 0.6, 0.6, 0.8);
+            }
+
+            // --- Entrance doorway — arched double glass doors ---
+            const dW = 4.8, dH = pillH * 0.62;
+            const dX = eX - dW * 0.5 - 1.2;
+            const dY = landingY;
+            // Dark recess (door opening)
+            ctx.fillStyle = '#100a06';
+            ctx.beginPath();
+            ctx.rect(dX, dY - dH, dW, dH);
+            ctx.fill();
+            // Arched top of opening
+            ctx.fillStyle = '#100a06';
+            ctx.beginPath();
+            ctx.arc(dX + dW * 0.5, dY - dH, dW * 0.5, Math.PI, 0);
+            ctx.fill();
+            // Double glass doors (blue/white)
+            const leafW = dW * 0.47;
+            for (let dd = 0; dd < 2; dd++) {
+                const lX = dX + dd * (leafW + dW * 0.06);
+                const doorG = ctx.createLinearGradient(lX, dY - dH, lX + leafW, dY - dH);
+                doorG.addColorStop(0, '#5a9cd0');
+                doorG.addColorStop(1, '#3a7aaa');
+                ctx.fillStyle = doorG;
+                ctx.fillRect(lX, dY - dH, leafW, dH);
+                // White mullions (cross)
+                ctx.fillStyle = '#f4eaca';
+                ctx.fillRect(lX, dY - dH * 0.55, leafW, 0.5);
+                ctx.fillRect(lX + leafW * 0.5 - 0.25, dY - dH, 0.5, dH);
+                // Outer frame
+                ctx.strokeStyle = '#f4eaca'; ctx.lineWidth = 0.45;
+                ctx.strokeRect(lX + 0.15, dY - dH + 0.15, leafW - 0.3, dH - 0.3);
+                // Specular highlight
+                ctx.fillStyle = 'rgba(255,255,255,0.28)';
+                ctx.fillRect(lX + 0.5, dY - dH + 0.5, leafW * 0.4, dH * 0.4);
+            }
+            // Door handles
+            ctx.fillStyle = '#e8b048';
+            ctx.beginPath();
+            ctx.arc(dX + leafW * 0.85, dY - dH * 0.48, 0.35, 0, Math.PI * 2);
+            ctx.arc(dX + leafW + dW * 0.06 + leafW * 0.15, dY - dH * 0.48, 0.35, 0, Math.PI * 2);
+            ctx.fill();
+            // Thick outer door frame (maroon)
+            ctx.strokeStyle = '#5a2010'; ctx.lineWidth = 0.9;
+            ctx.beginPath();
+            ctx.moveTo(dX - 0.4, dY);
+            ctx.lineTo(dX - 0.4, dY - dH);
+            ctx.arc(dX + dW * 0.5, dY - dH, dW * 0.5 + 0.4, Math.PI, 0);
+            ctx.lineTo(dX + dW + 0.4, dY);
+            ctx.stroke();
+            // Arch keystone highlight
+            ctx.strokeStyle = '#8a5020'; ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.arc(dX + dW * 0.5, dY - dH, dW * 0.5, Math.PI, 0);
+            ctx.stroke();
+
+            // --- Welcome mat ---
+            ctx.fillStyle = '#8a2818';
+            ctx.fillRect(dX - 1, dY - 0.1, dW + 2, 0.7);
+            ctx.strokeStyle = 'rgba(40,10,5,0.6)'; ctx.lineWidth = 0.3;
+            ctx.strokeRect(dX - 1, dY - 0.1, dW + 2, 0.7);
+        }
+
+        // =====================================================
+        //  FLAGPOLE + Indonesian flag (prominent front-left)
+        // =====================================================
+        if (p >= 0.7) {
+            const fpX = sx - hw * 0.85, fpY = sy + 7;
+            // Concrete base (stepped pedestal)
+            ctx.fillStyle = '#b8b0a0';
+            ctx.fillRect(fpX - 2.5, fpY - 1.2, 5, 1.6);
+            ctx.fillStyle = '#888070';
+            ctx.fillRect(fpX - 2.5, fpY + 0.3, 5, 0.4);
+            ctx.fillStyle = '#d4ccb8';
+            ctx.fillRect(fpX - 3, fpY - 2, 6, 0.9);
+            // Pole (tall, silvery)
+            ctx.strokeStyle = '#a0a0a0'; ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(fpX, fpY - 1.5);
+            ctx.lineTo(fpX, fpY - 38);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(240,240,240,0.5)'; ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(fpX - 0.4, fpY - 1.5);
+            ctx.lineTo(fpX - 0.4, fpY - 38);
+            ctx.stroke();
+            // Gold tip ball
+            ctx.fillStyle = '#f0c040';
+            ctx.beginPath();
+            ctx.arc(fpX, fpY - 39, 1.4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#d88020';
+            ctx.beginPath();
+            ctx.arc(fpX + 0.3, fpY - 39.2, 0.5, 0, Math.PI * 2);
+            ctx.fill();
+            // Rope (thin)
+            ctx.strokeStyle = 'rgba(180,150,100,0.6)'; ctx.lineWidth = 0.3;
+            ctx.beginPath();
+            ctx.moveTo(fpX + 0.5, fpY - 38);
+            ctx.lineTo(fpX + 1, fpY - 20);
+            ctx.lineTo(fpX + 0.3, fpY - 3);
+            ctx.stroke();
+
+            // FLAG — animated wave
+            const flagAttachY = fpY - 35;
+            const flagW = 14, flagH = 9;
+            const wave = Math.sin(anim * 1.8) * 1.4;
+            const wave2 = Math.sin(anim * 1.8 + 0.8) * 1.1;
+            // Red stripe (top)
+            const redG = ctx.createLinearGradient(fpX, flagAttachY, fpX + flagW, flagAttachY);
+            redG.addColorStop(0, '#c00c0c');
+            redG.addColorStop(1, '#e03020');
+            ctx.fillStyle = redG;
+            ctx.beginPath();
+            ctx.moveTo(fpX + 0.5, flagAttachY);
+            ctx.quadraticCurveTo(fpX + flagW * 0.5, flagAttachY + wave, fpX + flagW, flagAttachY + wave2);
+            ctx.lineTo(fpX + flagW, flagAttachY + flagH * 0.5 + wave2);
+            ctx.quadraticCurveTo(fpX + flagW * 0.5, flagAttachY + flagH * 0.5 + wave, fpX + 0.5, flagAttachY + flagH * 0.5);
+            ctx.closePath(); ctx.fill();
+            // White stripe (bottom)
+            const whiteG = ctx.createLinearGradient(fpX, flagAttachY + flagH * 0.5, fpX + flagW, flagAttachY + flagH * 0.5);
+            whiteG.addColorStop(0, '#f8f8f8');
+            whiteG.addColorStop(1, '#e8e8e8');
+            ctx.fillStyle = whiteG;
+            ctx.beginPath();
+            ctx.moveTo(fpX + 0.5, flagAttachY + flagH * 0.5);
+            ctx.quadraticCurveTo(fpX + flagW * 0.5, flagAttachY + flagH * 0.5 + wave, fpX + flagW, flagAttachY + flagH * 0.5 + wave2);
+            ctx.lineTo(fpX + flagW, flagAttachY + flagH + wave2);
+            ctx.quadraticCurveTo(fpX + flagW * 0.5, flagAttachY + flagH + wave, fpX + 0.5, flagAttachY + flagH);
+            ctx.closePath(); ctx.fill();
+            // Flag shadow (fold)
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.beginPath();
+            ctx.moveTo(fpX + flagW * 0.45, flagAttachY + 0.5);
+            ctx.quadraticCurveTo(fpX + flagW * 0.55, flagAttachY + flagH * 0.5 + wave * 0.8, fpX + flagW * 0.45, flagAttachY + flagH - 0.5);
+            ctx.lineTo(fpX + flagW * 0.55, flagAttachY + flagH - 0.5);
+            ctx.quadraticCurveTo(fpX + flagW * 0.6, flagAttachY + flagH * 0.5 + wave * 0.5, fpX + flagW * 0.55, flagAttachY + 0.5);
+            ctx.closePath(); ctx.fill();
+            // Flag outline
+            ctx.strokeStyle = 'rgba(60,20,10,0.35)'; ctx.lineWidth = 0.3;
+            ctx.beginPath();
+            ctx.moveTo(fpX + 0.5, flagAttachY);
+            ctx.quadraticCurveTo(fpX + flagW * 0.5, flagAttachY + wave, fpX + flagW, flagAttachY + wave2);
+            ctx.lineTo(fpX + flagW, flagAttachY + flagH + wave2);
+            ctx.quadraticCurveTo(fpX + flagW * 0.5, flagAttachY + flagH + wave, fpX + 0.5, flagAttachY + flagH);
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        // =====================================================
+        //  SCHOOLYARD ELEMENTS — basketball hoop, swing, slide
+        // =====================================================
+        if (p >= 0.8) {
+            // --- Basketball hoop (front-right on sand area) ---
+            const bbX = sx + 28, bbY = sy + 6;
+            // Pole
+            ctx.strokeStyle = '#3a3a3a'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(bbX, bbY); ctx.lineTo(bbX, bbY - 16); ctx.stroke();
+            // Backboard
+            ctx.fillStyle = '#f8f4e8';
+            ctx.fillRect(bbX - 3, bbY - 16, 5.5, 4);
+            ctx.strokeStyle = '#3a3a3a'; ctx.lineWidth = 0.4;
+            ctx.strokeRect(bbX - 3, bbY - 16, 5.5, 4);
+            ctx.strokeRect(bbX - 1.4, bbY - 14.7, 2.3, 1.6);
+            // Rim
+            ctx.strokeStyle = '#d84020'; ctx.lineWidth = 0.6;
+            ctx.beginPath();
+            ctx.ellipse(bbX - 0.3, bbY - 12.4, 1.2, 0.5, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            // Net (dangling)
+            ctx.strokeStyle = 'rgba(240,240,240,0.6)'; ctx.lineWidth = 0.3;
+            for (let n = -1; n <= 1; n++) {
+                ctx.beginPath();
+                ctx.moveTo(bbX - 0.3 + n * 0.8, bbY - 12.3);
+                ctx.quadraticCurveTo(bbX - 0.3 + n * 0.6, bbY - 11, bbX - 0.3 + n * 0.4, bbY - 10.5);
+                ctx.stroke();
+            }
+
+            // --- Swing set (front-left past flagpole) ---
+            const swX = sx - hw + 4, swY = sy + 14;
+            // Frame (A-frame)
+            ctx.strokeStyle = '#5a4028'; ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(swX - 5, swY); ctx.lineTo(swX - 3, swY - 8);
+            ctx.moveTo(swX + 5, swY); ctx.lineTo(swX + 3, swY - 8);
+            ctx.moveTo(swX - 3, swY - 8); ctx.lineTo(swX + 3, swY - 8);
+            // X supports
+            ctx.moveTo(swX - 5, swY); ctx.lineTo(swX + 3, swY - 8);
+            ctx.moveTo(swX + 5, swY); ctx.lineTo(swX - 3, swY - 8);
+            ctx.stroke();
+            // Swinging seat (animated)
+            const swingPhase = Math.sin(anim * 2.3) * 0.5;
+            const chainBottomX = swX + swingPhase * 3;
+            const chainBottomY = swY - 2 + Math.abs(swingPhase) * 1.2;
+            ctx.strokeStyle = 'rgba(90,90,90,0.8)'; ctx.lineWidth = 0.4;
+            ctx.beginPath();
+            ctx.moveTo(swX - 0.8, swY - 8); ctx.lineTo(chainBottomX - 0.8, chainBottomY);
+            ctx.moveTo(swX + 0.8, swY - 8); ctx.lineTo(chainBottomX + 0.8, chainBottomY);
+            ctx.stroke();
+            // Seat
+            ctx.fillStyle = '#8a3018';
+            ctx.fillRect(chainBottomX - 1.5, chainBottomY, 3, 0.8);
+
+            // --- Slide (small, yellow+red) ---
+            const slX = sx + 10, slY = sy + 20;
+            // Ladder
+            ctx.strokeStyle = '#5a4028'; ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(slX - 3, slY); ctx.lineTo(slX - 3, slY - 7);
+            ctx.moveTo(slX - 4, slY); ctx.lineTo(slX - 4, slY - 7);
+            for (let r = 0; r < 3; r++) {
+                ctx.moveTo(slX - 4, slY - 1.5 - r * 2); ctx.lineTo(slX - 3, slY - 1.5 - r * 2);
+            }
+            ctx.stroke();
+            // Slide chute (yellow gradient)
+            const chuteG = ctx.createLinearGradient(slX - 3, slY - 7, slX + 5, slY);
+            chuteG.addColorStop(0, '#f8d050');
+            chuteG.addColorStop(1, '#e08020');
+            ctx.fillStyle = chuteG;
+            ctx.beginPath();
+            ctx.moveTo(slX - 3, slY - 7);
+            ctx.lineTo(slX - 3, slY - 6);
+            ctx.lineTo(slX + 5, slY);
+            ctx.lineTo(slX + 5, slY - 1);
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = '#a04010'; ctx.lineWidth = 0.4; ctx.stroke();
+            // Safety rail
+            ctx.strokeStyle = '#d02020'; ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(slX - 2.8, slY - 7); ctx.lineTo(slX - 2.8, slY - 9);
+            ctx.moveTo(slX + 4.8, slY); ctx.lineTo(slX + 4.8, slY - 2);
+            ctx.stroke();
+
+            // --- Kids playing (4 children + teacher) ---
+            const kids = [
+                // [offsetX, offsetY, bodyColor, headColor, activity]
+                [sx + 16, sy + 12, '#3060c0', '#f0c890', 'ball'],   // near basketball
+                [sx + 20, sy + 16, '#d04040', '#e8b878', 'ball'],   // with ball
+                [chainBottomX, chainBottomY + 2, '#40a048', '#f4ccal', 'swing'], // on swing
+                [slX + 2, slY - 0.5,  '#e04090', '#f0c890', 'slide'],  // sliding down
+                [sx - 8, sy + 18, '#706050', '#e8b070', 'teacher'],  // teacher (gray)
+            ];
+            for (const k of kids) {
+                const [kx, ky, bodyCol, skinCol, act] = k;
+                const legSwing = Math.sin(anim * 3 + kx * 0.1) * 1.4;
+                // Shadow
+                ctx.fillStyle = 'rgba(0,0,0,0.20)';
+                ctx.beginPath();
+                ctx.ellipse(kx, ky + 1.2, 2, 0.9, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Legs (only if not on swing, slide)
+                if (act !== 'swing') {
+                    ctx.strokeStyle = '#2a2018'; ctx.lineWidth = 0.7;
+                    ctx.beginPath();
+                    ctx.moveTo(kx, ky); ctx.lineTo(kx - 1 + legSwing, ky + 2.5);
+                    ctx.moveTo(kx, ky); ctx.lineTo(kx + 1 - legSwing, ky + 2.5);
+                    ctx.stroke();
+                }
+                // Body (shirt)
+                ctx.fillStyle = bodyCol;
+                ctx.beginPath();
+                ctx.ellipse(kx, ky - 2, 1.6, 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Arms
+                ctx.strokeStyle = skinCol; ctx.lineWidth = 0.7;
+                const armSwing = Math.sin(anim * 3 + kx * 0.1 + Math.PI) * 0.8;
+                ctx.beginPath();
+                ctx.moveTo(kx - 1.3, ky - 2.5); ctx.lineTo(kx - 2.2 + armSwing, ky - 0.5);
+                ctx.moveTo(kx + 1.3, ky - 2.5); ctx.lineTo(kx + 2.2 - armSwing, ky - 0.5);
+                ctx.stroke();
+                // Head
+                ctx.fillStyle = skinCol;
+                ctx.beginPath();
+                ctx.arc(kx, ky - 4.2, 1.4, 0, Math.PI * 2);
+                ctx.fill();
+                // Hair (dark)
+                ctx.fillStyle = '#2a1a10';
+                ctx.beginPath();
+                ctx.arc(kx, ky - 4.8, 1.5, Math.PI, Math.PI * 2);
+                ctx.fill();
+                // Eye dots
+                ctx.fillStyle = '#1a1a1a';
+                ctx.beginPath();
+                ctx.arc(kx - 0.4, ky - 4.1, 0.18, 0, Math.PI * 2);
+                ctx.arc(kx + 0.4, ky - 4.1, 0.18, 0, Math.PI * 2);
+                ctx.fill();
+                // If teacher, add a tie
+                if (act === 'teacher') {
+                    ctx.fillStyle = '#8a2020';
+                    ctx.fillRect(kx - 0.3, ky - 3, 0.6, 1.8);
+                }
+            }
+
+            // --- Red rubber ball on sand (bouncing) ---
+            const ballBounce = Math.abs(Math.sin(anim * 3.2)) * -3;
+            const ballX = sx + 18, ballY = sy + 15 + ballBounce;
+            // Shadow on ground
+            ctx.fillStyle = `rgba(0,0,0,${0.25 - Math.abs(ballBounce) * 0.04})`;
+            ctx.beginPath();
+            ctx.ellipse(ballX, sy + 15.5, 1.5, 0.6, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Ball with gradient
+            const ballG = ctx.createRadialGradient(ballX - 0.5, ballY - 0.5, 0, ballX, ballY, 1.6);
+            ballG.addColorStop(0, '#ff8080');
+            ballG.addColorStop(0.7, '#e03030');
+            ballG.addColorStop(1, '#a01010');
+            ctx.fillStyle = ballG;
+            ctx.beginPath(); ctx.arc(ballX, ballY, 1.4, 0, Math.PI * 2); ctx.fill();
+            // Ball stripes
+            ctx.strokeStyle = 'rgba(80,0,0,0.6)'; ctx.lineWidth = 0.25;
+            ctx.beginPath();
+            ctx.moveTo(ballX - 1.3, ballY); ctx.lineTo(ballX + 1.3, ballY);
+            ctx.ellipse(ballX, ballY, 0.7, 1.3, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // =====================================================
+        //  LANDSCAPING — hedges + trees + flower beds
+        // =====================================================
+        if (p >= 0.85) {
+            // Hedge line along front wall (left side of entrance)
+            ctx.save();
+            for (let i = 0; i < 5; i++) {
+                const t = i / 4;
+                const hxPos = sx - hw + 3 + (hw * 0.25) * t;
+                const hyPos = foundTop + 0.5 - hd * 0.05 * t;
+                const hg = ctx.createRadialGradient(hxPos - 0.5, hyPos - 1.2, 0, hxPos, hyPos, 2.4);
+                hg.addColorStop(0, '#6ac848');
+                hg.addColorStop(1, '#2a6818');
+                ctx.fillStyle = hg;
+                ctx.beginPath();
+                ctx.ellipse(hxPos, hyPos, 2.2, 1.4, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+
+            // 4 corner trees (varied species)
+            this._treeSmall(ctx, sx - hw - 6, sy + 2,  11, '#5a3a1a', '#3a8830');
+            this._treeSmall(ctx, sx + hw + 6, sy - 4, 10, '#4a3010', '#42a038');
+            this._treeSmall(ctx, sx - 6,      sy + 24, 9,  '#5a3818', '#38a030');
+            // Palm-like tall tree at back-right corner
+            const palmX = sx + hw + 4, palmY = sy - hd - 2;
+            ctx.strokeStyle = '#7a5018'; ctx.lineWidth = 1.1;
+            ctx.beginPath();
+            ctx.moveTo(palmX, palmY);
+            ctx.quadraticCurveTo(palmX + 1, palmY - 7, palmX - 1, palmY - 14);
+            ctx.stroke();
+            // Palm fronds
+            ctx.fillStyle = '#4aa048';
+            for (let f = 0; f < 6; f++) {
+                const ang = -Math.PI / 2 + (f - 2.5) * 0.6;
+                const sway = Math.sin(anim * 1.5 + f) * 0.2;
+                const tipX = palmX - 1 + Math.cos(ang + sway) * 5;
+                const tipY = palmY - 14 + Math.sin(ang + sway) * 5 * 0.6;
+                ctx.beginPath();
+                ctx.ellipse((palmX - 1 + tipX) * 0.5, (palmY - 14 + tipY) * 0.5,
+                            2.6, 1, ang + sway, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            // Coconuts
+            ctx.fillStyle = '#4a2818';
+            ctx.beginPath();
+            ctx.arc(palmX - 0.7, palmY - 13, 0.8, 0, Math.PI * 2);
+            ctx.arc(palmX + 0.3, palmY - 12.4, 0.7, 0, Math.PI * 2);
+            ctx.fill();
         }
     },
 
@@ -10844,72 +12602,390 @@ const Renderer = {
         }
     },
 
+    // --- MENARA TELEKOMUNIKASI (BTS tower) ---
+    _drawMenaraTelkom(ctx, sx, sy, p) {
+        const anim = this.animTime || 0;
+        const seed = this._buildingSeed || 0;
+        const totalH = 50 * p;
+
+        // --- Concrete base pad ---
+        ctx.fillStyle = '#b0a898';
+        this._tileDiamond(ctx, sx, sy, 40, 20);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(140,130,115,0.5)';
+        ctx.lineWidth = 0.5;
+        this._tileDiamond(ctx, sx, sy, 40, 20);
+        ctx.stroke();
+        // Inner darker pad
+        ctx.fillStyle = '#98907f';
+        this._tileDiamond(ctx, sx, sy, 30, 15);
+        ctx.fill();
+        // Safety hazard stripes (yellow/black) around base
+        ctx.strokeStyle = 'rgba(220,180,20,0.7)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        this._tileDiamond(ctx, sx, sy, 34, 17);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // --- Small equipment shed (telco control hut) ---
+        if (p > 0.3) {
+            const shX = sx + 12, shY = sy + 2;
+            this._box(ctx, shX, shY, 6, 3, 1.5,
+                '#b0a898', ['#a09888','#908878'], ['#807868','#706858']);
+            this._box(ctx, shX, shY - 1.5, 6, 3, 5 * p,
+                '#d8d0c0', ['#c8c0b0','#b8b0a0'], ['#a8a090','#988878']);
+            // Door
+            ctx.fillStyle = '#3a2818';
+            ctx.fillRect(shX - 1, shY - 1.5 - 3, 2, 3);
+            // Vent
+            ctx.fillStyle = 'rgba(60,60,60,0.6)';
+            ctx.fillRect(shX + 1.5, shY - 1.5 - 3.5, 2, 1);
+        }
+
+        // --- Lattice Tower (4 legs forming pyramid, tapering) ---
+        // Tower footprint
+        const bw = 6;     // base half-width
+        const tw = 1.5;   // top half-width (tapered)
+        // Leg end positions at top (relative to sx)
+        const legBases = [
+            { x: sx - bw, y: sy - 1 },
+            { x: sx + bw, y: sy - 1 },
+            { x: sx, y: sy - 1 - 3 },
+            { x: sx, y: sy - 1 + 3 }
+        ];
+        const legTops = [
+            { x: sx - tw, y: sy - 1 - totalH },
+            { x: sx + tw, y: sy - 1 - totalH },
+            { x: sx, y: sy - 1 - totalH - 0.8 },
+            { x: sx, y: sy - 1 - totalH + 0.8 }
+        ];
+        // Back-face legs (drawn first, darker)
+        ctx.strokeStyle = '#4a4a4a';
+        ctx.lineWidth = 1.4;
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 2; i++) {
+            const base = legBases[i + 2], top = legTops[i + 2];
+            ctx.beginPath();
+            ctx.moveTo(base.x, base.y);
+            ctx.lineTo(top.x, top.y);
+            ctx.stroke();
+        }
+        // Horizontal cross-braces (back legs)
+        ctx.strokeStyle = '#5a5a5a';
+        ctx.lineWidth = 0.7;
+        const braces = Math.floor(totalH / 6);
+        for (let b = 1; b < braces; b++) {
+            const t = b / braces;
+            const y = sy - 1 - totalH * t;
+            const wAtT = bw + (tw - bw) * t;
+            // Back horizontal brace (connects top/bottom back legs)
+            ctx.beginPath();
+            ctx.moveTo(sx, sy - 1 - 3 + ((sy - 1 - totalH - 0.8) - (sy - 1 - 3)) * t);
+            ctx.lineTo(sx, sy - 1 + 3 + ((sy - 1 - totalH + 0.8) - (sy - 1 + 3)) * t);
+            ctx.stroke();
+        }
+
+        // Front-face legs (drawn on top)
+        ctx.strokeStyle = '#6a6a6a';
+        ctx.lineWidth = 1.6;
+        for (let i = 0; i < 2; i++) {
+            const base = legBases[i], top = legTops[i];
+            ctx.beginPath();
+            ctx.moveTo(base.x, base.y);
+            ctx.lineTo(top.x, top.y);
+            ctx.stroke();
+            // Highlight (sunward edge)
+            if (i === 0) {
+                ctx.strokeStyle = 'rgba(230,220,200,0.35)';
+                ctx.lineWidth = 0.5;
+                ctx.beginPath();
+                ctx.moveTo(base.x - 0.3, base.y);
+                ctx.lineTo(top.x - 0.3, top.y);
+                ctx.stroke();
+                ctx.strokeStyle = '#6a6a6a';
+                ctx.lineWidth = 1.6;
+            }
+        }
+
+        // X cross-braces between front legs at each level
+        ctx.strokeStyle = 'rgba(100,100,100,0.85)';
+        ctx.lineWidth = 0.7;
+        for (let b = 0; b < braces; b++) {
+            const t1 = b / braces, t2 = (b + 1) / braces;
+            const y1 = sy - 1 - totalH * t1;
+            const y2 = sy - 1 - totalH * t2;
+            const w1 = bw + (tw - bw) * t1;
+            const w2 = bw + (tw - bw) * t2;
+            // X braces front
+            ctx.beginPath();
+            ctx.moveTo(sx - w1, y1); ctx.lineTo(sx + w2, y2);
+            ctx.moveTo(sx + w1, y1); ctx.lineTo(sx - w2, y2);
+            ctx.stroke();
+            // Horizontal ring
+            ctx.strokeStyle = '#707070';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(sx - w2, y2); ctx.lineTo(sx + w2, y2);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(100,100,100,0.85)';
+            ctx.lineWidth = 0.7;
+        }
+
+        // --- Antenna array at the top ---
+        if (p > 0.5) {
+            const topY = sy - 1 - totalH;
+            // Main mast (continues above tower)
+            ctx.strokeStyle = '#505050';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(sx, topY);
+            ctx.lineTo(sx, topY - 10);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(220,210,190,0.4)';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(sx - 0.3, topY);
+            ctx.lineTo(sx - 0.3, topY - 10);
+            ctx.stroke();
+
+            // BTS sector antennas (3 rectangular panels around mast)
+            ctx.fillStyle = '#d8d4c8';
+            ctx.strokeStyle = 'rgba(40,30,20,0.5)';
+            ctx.lineWidth = 0.4;
+            // Left panel
+            ctx.fillRect(sx - 4.2, topY - 2, 1.2, 4);
+            ctx.strokeRect(sx - 4.2, topY - 2, 1.2, 4);
+            // Right panel
+            ctx.fillRect(sx + 3, topY - 2, 1.2, 4);
+            ctx.strokeRect(sx + 3, topY - 2, 1.2, 4);
+            // Back panel (foreshortened)
+            ctx.fillRect(sx - 0.6, topY - 4, 1.2, 3);
+            ctx.strokeRect(sx - 0.6, topY - 4, 1.2, 3);
+            // Support arms
+            ctx.strokeStyle = '#606060';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(sx - 0.5, topY); ctx.lineTo(sx - 3.5, topY);
+            ctx.moveTo(sx + 0.5, topY); ctx.lineTo(sx + 3.5, topY);
+            ctx.stroke();
+
+            // Parabolic microwave dish
+            const dX = sx - 3, dY = topY - 6;
+            ctx.fillStyle = '#f0ecdc';
+            ctx.beginPath();
+            ctx.ellipse(dX, dY, 2.2, 2.6, 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(30,20,10,0.5)';
+            ctx.lineWidth = 0.4;
+            ctx.stroke();
+            // Dish shadow (inner)
+            ctx.fillStyle = 'rgba(180,170,150,0.6)';
+            ctx.beginPath();
+            ctx.ellipse(dX + 0.4, dY + 0.3, 1.6, 2.0, 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            // Feed horn
+            ctx.strokeStyle = '#505050';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(dX, dY); ctx.lineTo(dX + 1.8, dY);
+            ctx.stroke();
+
+            // --- Blinking red warning light at top ---
+            const blink = (Math.sin(anim * 2.5 + (seed % 7)) + 1) * 0.5;
+            ctx.fillStyle = `rgba(250,60,40,${0.35 + blink * 0.55})`;
+            ctx.beginPath();
+            ctx.arc(sx, topY - 10.5, 1.4 + blink * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+            // Glow halo when bright
+            if (blink > 0.5) {
+                ctx.fillStyle = `rgba(250,100,80,${(blink - 0.5) * 0.4})`;
+                ctx.beginPath();
+                ctx.arc(sx, topY - 10.5, 3.5 + blink * 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // --- Guy wires (from tower mid-point down to ground anchors) ---
+        if (p > 0.7) {
+            ctx.strokeStyle = 'rgba(80,80,80,0.5)';
+            ctx.lineWidth = 0.4;
+            const mid = sy - 1 - totalH * 0.55;
+            ctx.beginPath();
+            ctx.moveTo(sx - 3, mid); ctx.lineTo(sx - 14, sy + 4);
+            ctx.moveTo(sx + 3, mid); ctx.lineTo(sx + 14, sy - 4);
+            ctx.stroke();
+            // Anchor points
+            ctx.fillStyle = '#606060';
+            ctx.beginPath();
+            ctx.arc(sx - 14, sy + 4, 0.8, 0, Math.PI * 2);
+            ctx.arc(sx + 14, sy - 4, 0.8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
     // --- GENERIC FALLBACK ---
     _drawGeneric(ctx, sx, sy, bData, p) {
         const size = bData.size || 1;
-        // Scale building dimensions based on tile size
         const sizeScale = { 1: { hw: 22, hd: 11 }, 2: { hw: 36, hd: 18 }, 3: { hw: 50, hd: 25 }, 4: { hw: 64, hd: 32 } };
         const dims = sizeScale[size] || sizeScale[1];
         const hw = dims.hw;
         const hd = dims.hd;
         const h = (bData.height || 20) * p;
+        const anim = this.animTime || 0;
+        const seed = this._buildingSeed || 0;
+        const rng = this._seededRandom(seed);
 
-        this._shadow(ctx, sx, sy, hw + 4, hd + 3);
+        // --- Contact AO under building (darkens where walls meet ground) ---
+        this._contactAO(ctx, sx, sy, hw + 2, hd + 1.5);
 
-        // For tall buildings (>40), draw a base section and a tower section for visual depth
+        // --- Low foundation plinth (concrete/stone base) ---
+        const foundH = Math.min(3, h * 0.18);
+        if (foundH > 0.5) {
+            this._box(ctx, sx, sy, hw + 2, hd + 1, foundH,
+                '#b8b0a0', ['#a8a090','#988878'], ['#887868','#786858']);
+        }
+
+        // --- Determine if this is a tall tower or low building ---
         if (h > 40) {
-            // Base podium
-            const baseH = 12 * p;
+            // ===== TALL TOWER (skyscraper-like) =====
+            const baseH = Math.max(foundH, 10 * p);
+            // Podium (wider base)
             this._box(ctx, sx, sy, hw + 4, hd + 2, baseH,
-                this._lighten(bData.colors.top, 10),
-                [bData.colors.left, this._darken(bData.colors.left, 10)],
-                [bData.colors.right, this._darken(bData.colors.right, 10)]);
-            
-            // Tower
-            const towerHw = hw * 0.7;
-            const towerHd = hd * 0.7;
+                this._lighten(bData.colors.top, 15),
+                [bData.colors.left, this._darken(bData.colors.left, 12)],
+                [bData.colors.right, this._darken(bData.colors.right, 18)]);
+
+            // Tower (slightly narrower)
+            const towerHw = hw * 0.72;
+            const towerHd = hd * 0.72;
             this._box(ctx, sx, sy - baseH, towerHw, towerHd, h - baseH,
                 bData.colors.top,
-                [bData.colors.left, this._darken(bData.colors.left, 20)],
-                [bData.colors.right, this._darken(bData.colors.right, 20)]);
+                [bData.colors.left, this._darken(bData.colors.left, 22)],
+                [bData.colors.right, this._darken(bData.colors.right, 28)]);
 
-            // Windows on tower
-            const windowRows = Math.floor((h - baseH) / 8);
-            ctx.fillStyle = 'rgba(180,220,255,0.4)';
+            // --- Window grid on tower (some lit) ---
+            const windowRows = Math.floor((h - baseH) / 7.5);
+            const winW = 2.8, winH = 3.6, winGap = 7.5;
             for (let row = 1; row <= windowRows; row++) {
-                const wy = sy - baseH - row * 7;
-                // Left face windows
-                ctx.fillRect(sx - towerHw * 0.6, wy + towerHd * 0.3, 3, 4);
-                ctx.fillRect(sx - towerHw * 0.3, wy + towerHd * 0.15, 3, 4);
-                // Right face windows
-                ctx.fillRect(sx + towerHw * 0.15, wy + towerHd * 0.15, 3, 4);
-                ctx.fillRect(sx + towerHw * 0.45, wy + towerHd * 0.3, 3, 4);
-            }
-
-            if (bData.roofColors) {
-                this._hipRoof(ctx, sx, sy - baseH, towerHw, towerHd, h - baseH, 8 * p, 3,
-                    bData.roofColors.left, bData.roofColors.right, bData.roofColors.top);
-            }
-        } else {
-            this._box(ctx, sx, sy, hw, hd, h,
-                bData.colors.top,
-                [bData.colors.left, this._darken(bData.colors.left, 20)],
-                [bData.colors.right, this._darken(bData.colors.right, 20)]);
-
-            // Windows for medium buildings
-            if (h > 15) {
-                const windowRows = Math.floor(h / 10);
-                ctx.fillStyle = 'rgba(180,220,255,0.35)';
-                for (let row = 1; row <= windowRows; row++) {
-                    const wy = sy - row * 8;
-                    ctx.fillRect(sx - hw * 0.5, wy + hd * 0.3, 3, 3);
-                    ctx.fillRect(sx + hw * 0.2, wy + hd * 0.2, 3, 3);
+                const wy = sy - baseH - row * winGap;
+                // Left face — 2-3 windows per row
+                for (let c = 0; c < 3; c++) {
+                    const wx = sx - towerHw * 0.78 + c * (towerHw * 0.5);
+                    const offsetY = wy + towerHd * (0.35 - c * 0.12);
+                    this._litWindow(ctx, wx, offsetY, winW, winH, seed + row * 13 + c * 7);
+                }
+                // Right face
+                for (let c = 0; c < 3; c++) {
+                    const wx = sx + 2 + c * (towerHw * 0.5);
+                    const offsetY = wy + towerHd * (0.12 + c * 0.12);
+                    this._litWindow(ctx, wx, offsetY, winW, winH, seed + row * 17 + c * 11 + 1000);
                 }
             }
 
+            // --- Roof: parapet with antenna ---
             if (bData.roofColors) {
-                this._hipRoof(ctx, sx, sy, hw, hd, h, 10 * p, 4,
-                    bData.roofColors.left, bData.roofColors.right, bData.roofColors.top);
+                this._box(ctx, sx, sy - baseH - (h - baseH), towerHw + 1.5, towerHd + 0.8, 2,
+                    bData.roofColors.top,
+                    [bData.roofColors.left, this._darken(bData.roofColors.left, 15)],
+                    [bData.roofColors.right, this._darken(bData.roofColors.right, 20)]);
+            }
+            // Antenna/spire
+            ctx.strokeStyle = '#404040'; ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy - baseH - (h - baseH));
+            ctx.lineTo(sx, sy - baseH - (h - baseH) - 12);
+            ctx.stroke();
+            // Red warning light (blinks)
+            const blink = (Math.sin(anim * 3) + 1) * 0.5;
+            ctx.fillStyle = `rgba(240,60,40,${0.5 + blink * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(sx, sy - baseH - (h - baseH) - 12.5, 1.2 + blink * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            // ===== LOW/MEDIUM BUILDING =====
+            const bodyH = h - foundH;
+            // Main body (slightly inset from foundation)
+            this._box(ctx, sx, sy - foundH, hw, hd, bodyH,
+                bData.colors.top,
+                [bData.colors.left, this._darken(bData.colors.left, 22)],
+                [bData.colors.right, this._darken(bData.colors.right, 28)]);
+
+            // --- Front door (on right wall — lower portion) ---
+            if (bodyH > 8 && p > 0.4) {
+                const dW = 3.5, dH = Math.min(6, bodyH * 0.5);
+                const dx = sx + hw * 0.25;
+                const dy = sy - foundH + hd * 0.4;
+                // Frame
+                ctx.fillStyle = '#3a2410';
+                ctx.fillRect(dx - 0.3, dy - dH - 0.3, dW + 0.6, dH + 0.3);
+                // Door
+                ctx.fillStyle = '#6a4018';
+                ctx.fillRect(dx, dy - dH, dW, dH);
+                // Handle
+                ctx.fillStyle = '#d8b040';
+                ctx.beginPath();
+                ctx.arc(dx + dW * 0.75, dy - dH * 0.45, 0.5, 0, Math.PI * 2);
+                ctx.fill();
+                // Door top highlight
+                ctx.fillStyle = 'rgba(255,230,180,0.2)';
+                ctx.fillRect(dx, dy - dH, dW, dH * 0.1);
+            }
+
+            // --- Windows (on both walls) ---
+            if (bodyH > 10 && p > 0.45) {
+                const rows = Math.max(1, Math.floor(bodyH / 10));
+                const cols = size >= 2 ? 3 : 2;
+                const winW = 2.8, winH = 3.4;
+                for (let r = 0; r < rows; r++) {
+                    const wy = sy - foundH - (r + 0.6) * (bodyH / (rows + 0.3));
+                    // Left wall windows
+                    for (let c = 0; c < cols; c++) {
+                        const t = (c + 1) / (cols + 1);
+                        const wx = sx - hw + hw * t - winW * 0.5;
+                        const wyy = wy + hd * (t - 0.5);
+                        this._litWindow(ctx, wx, wyy, winW, winH, seed + r * 19 + c * 23);
+                    }
+                    // Right wall windows (fewer to make room for door)
+                    for (let c = 0; c < cols - (r === 0 ? 1 : 0); c++) {
+                        const t = (c + 1) / (cols + 1);
+                        const wx = sx + hw * t * 0.7 - winW * 0.5;
+                        const wyy = wy + hd * (0.4 - t * 0.4);
+                        this._litWindow(ctx, wx, wyy, winW, winH, seed + r * 29 + c * 31 + 7);
+                    }
+                }
+            }
+
+            // --- Roof ---
+            if (bData.roofColors) {
+                const useGable = (seed % 3) === 0 && size <= 2;
+                if (useGable) {
+                    this._gableRoof(ctx, sx, sy - foundH, hw, hd, bodyH, 9 * p, 3,
+                        bData.roofColors.left, bData.roofColors.right, bData.roofColors.top);
+                } else {
+                    this._hipRoof(ctx, sx, sy - foundH, hw, hd, bodyH, 8 * p, 3.5,
+                        bData.roofColors.left, bData.roofColors.right, bData.roofColors.top);
+                }
+            } else {
+                // Flat roof with parapet + rooftop details
+                this._box(ctx, sx, sy - foundH - bodyH + 1, hw + 0.5, hd + 0.3, 1.5,
+                    this._lighten(bData.colors.top, 5),
+                    [this._darken(bData.colors.left, 10), this._darken(bData.colors.left, 20)],
+                    [this._darken(bData.colors.right, 12), this._darken(bData.colors.right, 22)]);
+                // HVAC unit on rooftop
+                if (bodyH > 10) {
+                    const hvX = sx - hw * 0.3, hvY = sy - foundH - bodyH;
+                    ctx.fillStyle = '#989898';
+                    ctx.fillRect(hvX - 2, hvY - 3, 4, 3);
+                    ctx.fillStyle = '#707070';
+                    ctx.fillRect(hvX - 1.8, hvY - 2.8, 3.6, 0.8);
+                }
+            }
+
+            // --- Chimney with smoke (for residential-feel buildings, based on seed) ---
+            if (bodyH > 12 && (seed % 4) === 1 && bData.roofColors) {
+                const chX = sx - hw * 0.28, chY = sy - foundH - bodyH - 3;
+                this._chimneySmoke(ctx, chX, chY, 4 + (seed % 3), anim, '#8a5a38');
             }
         }
     },
@@ -11065,6 +13141,74 @@ const Renderer = {
         }
     },
 
+    // Draw a single person at a world tile coordinate (cx, cy)
+    _drawPerson(ctx, p, cx, cy) {
+        const scr = this.tileToScreen(cx, cy);
+        const sx = scr.x, sy = scr.y;
+        const walk = Math.sin(this.animTime * 10 + cx * 3) * 1.5 * (p.dir || 1);
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.beginPath();
+        ctx.ellipse(sx, sy + 1, 3, 1.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Legs
+        ctx.strokeStyle = '#4a3a2a';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(sx - 1.2, sy - 3); ctx.lineTo(sx - 1.2 + walk * 0.5, sy);
+        ctx.moveTo(sx + 1.2, sy - 3); ctx.lineTo(sx + 1.2 - walk * 0.5, sy);
+        ctx.stroke();
+
+        // Body
+        ctx.fillStyle = p.shirt;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy - 5.5, 2.5, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Arms
+        ctx.strokeStyle = p.shirt;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sx - 2.5, sy - 6); ctx.lineTo(sx - 3.5 - walk * 0.3, sy - 3);
+        ctx.moveTo(sx + 2.5, sy - 6); ctx.lineTo(sx + 3.5 + walk * 0.3, sy - 3);
+        ctx.stroke();
+
+        // Skin (arms)
+        ctx.strokeStyle = p.skin;
+        ctx.beginPath();
+        ctx.moveTo(sx - 3.5 - walk * 0.3, sy - 3);
+        ctx.lineTo(sx - 3.5 - walk * 0.3, sy - 1.5);
+        ctx.moveTo(sx + 3.5 + walk * 0.3, sy - 3);
+        ctx.lineTo(sx + 3.5 + walk * 0.3, sy - 1.5);
+        ctx.stroke();
+
+        // Head
+        ctx.fillStyle = p.skin;
+        ctx.beginPath();
+        ctx.arc(sx, sy - 9.5, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hair
+        ctx.fillStyle = '#2a1a0a';
+        ctx.beginPath();
+        ctx.arc(sx, sy - 10.5, 2.5, Math.PI * 1.2, Math.PI * 1.8);
+        ctx.fill();
+
+        // Hat (farmer)
+        if (p.hat) {
+            ctx.fillStyle = '#c8a860';
+            ctx.beginPath();
+            ctx.ellipse(sx, sy - 11.5, 4, 1.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#b89850';
+            ctx.fillRect(sx - 2, sy - 13, 4, 2);
+        }
+    },
+
+    // Legacy wrapper — still called from some places; just iterates drawing,
+    // but the real pipeline now depth-sorts people together with buildings.
     renderPeople(ctx) {
         this.updatePeople();
         for (const p of this.people) {
@@ -11073,68 +13217,7 @@ const Renderer = {
             const wp0 = p.path[idx0], wp1 = p.path[idx1];
             const cx = wp0.x + (wp1.x - wp0.x) * p.progress;
             const cy = wp0.y + (wp1.y - wp0.y) * p.progress;
-            const scr = this.tileToScreen(cx, cy);
-            const sx = scr.x, sy = scr.y;
-            const walk = Math.sin(this.animTime * 10 + wp0.x * 3) * 1.5 * (p.dir || 1);
-
-            // Shadow
-            ctx.fillStyle = 'rgba(0,0,0,0.12)';
-            ctx.beginPath();
-            ctx.ellipse(sx, sy + 1, 3, 1.2, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Legs
-            ctx.strokeStyle = '#4a3a2a';
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.moveTo(sx - 1.2, sy - 3); ctx.lineTo(sx - 1.2 + walk * 0.5, sy);
-            ctx.moveTo(sx + 1.2, sy - 3); ctx.lineTo(sx + 1.2 - walk * 0.5, sy);
-            ctx.stroke();
-
-            // Body
-            ctx.fillStyle = p.shirt;
-            ctx.beginPath();
-            ctx.ellipse(sx, sy - 5.5, 2.5, 3, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Arms
-            ctx.strokeStyle = p.shirt;
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(sx - 2.5, sy - 6); ctx.lineTo(sx - 3.5 - walk * 0.3, sy - 3);
-            ctx.moveTo(sx + 2.5, sy - 6); ctx.lineTo(sx + 3.5 + walk * 0.3, sy - 3);
-            ctx.stroke();
-
-            // Skin (arms)
-            ctx.strokeStyle = p.skin;
-            ctx.beginPath();
-            ctx.moveTo(sx - 3.5 - walk * 0.3, sy - 3);
-            ctx.lineTo(sx - 3.5 - walk * 0.3, sy - 1.5);
-            ctx.moveTo(sx + 3.5 + walk * 0.3, sy - 3);
-            ctx.lineTo(sx + 3.5 + walk * 0.3, sy - 1.5);
-            ctx.stroke();
-
-            // Head
-            ctx.fillStyle = p.skin;
-            ctx.beginPath();
-            ctx.arc(sx, sy - 9.5, 2.5, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Hair
-            ctx.fillStyle = '#2a1a0a';
-            ctx.beginPath();
-            ctx.arc(sx, sy - 10.5, 2.5, Math.PI * 1.2, Math.PI * 1.8);
-            ctx.fill();
-
-            // Hat (farmer)
-            if (p.hat) {
-                ctx.fillStyle = '#c8a860';
-                ctx.beginPath();
-                ctx.ellipse(sx, sy - 11.5, 4, 1.5, 0, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.fillStyle = '#b89850';
-                ctx.fillRect(sx - 2, sy - 13, 4, 2);
-            }
+            this._drawPerson(ctx, p, cx, cy);
         }
     },
 
@@ -11227,27 +13310,39 @@ const Renderer = {
         const w = this._cssW || this.canvas.width / dpr;
         const h = this._cssH || this.canvas.height / dpr;
 
-        // Sky gradient (warm & bright)
+        // Sky gradient (warm & bright, golden-hour tint)
         const sky = ctx.createLinearGradient(0, 0, 0, h);
-        sky.addColorStop(0, '#6cb4e6');
-        sky.addColorStop(0.3, '#8cc8f0');
-        sky.addColorStop(0.6, '#a8d8f4');
-        sky.addColorStop(1, '#c8e8f8');
+        sky.addColorStop(0, '#72b6e6');
+        sky.addColorStop(0.3, '#93cbee');
+        sky.addColorStop(0.6, '#bddff0');
+        sky.addColorStop(0.85, '#e8dcc0');         // warm haze near horizon
+        sky.addColorStop(1, '#f4d4a2');            // golden horizon band
         ctx.fillStyle = sky;
         ctx.fillRect(0, 0, w, h);
 
-        // Sun
-        ctx.fillStyle = 'rgba(255,240,180,0.4)';
+        // Sun (warm glow with halo)
+        const sunX = w * 0.82, sunY = 62;
+        const sunHalo = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, 90);
+        sunHalo.addColorStop(0, 'rgba(255,245,200,0.7)');
+        sunHalo.addColorStop(0.5, 'rgba(255,230,160,0.25)');
+        sunHalo.addColorStop(1, 'rgba(255,230,160,0)');
+        ctx.fillStyle = sunHalo;
         ctx.beginPath();
-        ctx.arc(w * 0.85, 60, 35, 0, Math.PI * 2);
+        ctx.arc(sunX, sunY, 90, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = 'rgba(255,250,220,0.6)';
+        ctx.fillStyle = 'rgba(255,250,220,0.85)';
         ctx.beginPath();
-        ctx.arc(w * 0.85, 60, 20, 0, Math.PI * 2);
+        ctx.arc(sunX, sunY, 22, 0, Math.PI * 2);
         ctx.fill();
+
+        // Distant hills/mountain silhouettes (parallax, static for each frame)
+        this.renderHorizon(ctx, w, h);
 
         // Clouds
         this.renderClouds(ctx, w);
+
+        // Birds (drawn in sky pass, small & far)
+        this.renderBirds(ctx, w, h);
 
         ctx.save();
         ctx.translate(this.camera.x, this.camera.y);
@@ -11272,33 +13367,67 @@ const Renderer = {
             }
         }
 
-        // === PASS 2: Forest trees + Buildings (back to front for depth) ===
+        // === PASS 2: Depth-sorted buildings + trees + people ===
+        // In isometric view, depth = (x + y). Higher depth = closer to viewer.
+        // Items are collected with a depth key, sorted, and rendered back-to-front
+        // so that NPCs can be properly occluded by buildings they stand behind.
+        const drawables = [];
+
         for (let y = 0; y < GameData.MAP_SIZE; y++) {
             for (let x = 0; x < GameData.MAP_SIZE; x++) {
                 const scr = this.tileToScreen(x, y);
                 if (scr.x < vpLeft - 100 || scr.x > vpRight + 100 || scr.y < vpTop - 150 || scr.y > vpBottom + 30) continue;
 
-                try {
-                    // Forest trees (use sprites if available)
-                    if (Game.map.tiles[y * GameData.MAP_SIZE + x] === GameData.TILE.FOREST) {
-                        if (!this.spritesLoaded || !this._renderTreeSprite(ctx, scr.x, scr.y, x, y)) {
-                            this._treeLarge(ctx, scr.x, scr.y - 4, x * 100 + y);
-                        }
-                    }
+                if (Game.map.tiles[y * GameData.MAP_SIZE + x] === GameData.TILE.FOREST) {
+                    drawables.push({ d: x + y - 0.1, kind: 'tree', x, y, sx: scr.x, sy: scr.y });
+                }
 
-                    // Buildings
-                    const building = Game.map.buildings[y * GameData.MAP_SIZE + x];
-                    if (building && building.id && building.originX === x && building.originY === y) {
-                        this.renderBuilding(ctx, x, y, building);
-                    }
-                } catch (e) {
-                    // skip broken item, don't crash
+                const building = Game.map.buildings[y * GameData.MAP_SIZE + x];
+                if (building && building.id && building.originX === x && building.originY === y) {
+                    const bd = GameData.BUILDINGS[building.id];
+                    const bSize = (bd && bd.size) ? bd.size : 1;
+                    // Depth key = front-most corner of footprint so people standing
+                    // in front of the building render on top, but people behind are hidden.
+                    drawables.push({
+                        d: x + y + (bSize - 1) * 2,
+                        kind: 'bld', x, y, building
+                    });
                 }
             }
         }
 
-        // === PASS 3: People ===
-        try { this.renderPeople(ctx); } catch(e) {}
+        // Update people positions once per frame and collect for sorting
+        try { this.updatePeople(); } catch(e) {}
+        for (const p of this.people) {
+            const idx0 = Math.min(p.pathIdx, p.path.length - 1);
+            const idx1 = Math.min(p.pathIdx + 1, p.path.length - 1);
+            const wp0 = p.path[idx0], wp1 = p.path[idx1];
+            const cx = wp0.x + (wp1.x - wp0.x) * p.progress;
+            const cy = wp0.y + (wp1.y - wp0.y) * p.progress;
+            // Only render if in viewport
+            const scr = this.tileToScreen(cx, cy);
+            if (scr.x < vpLeft - 40 || scr.x > vpRight + 40 || scr.y < vpTop - 40 || scr.y > vpBottom + 40) continue;
+            drawables.push({ d: cx + cy, kind: 'ppl', p, cx, cy });
+        }
+
+        // Back-to-front sort by isometric depth
+        drawables.sort((a, b) => a.d - b.d);
+
+        for (const item of drawables) {
+            try {
+                if (item.kind === 'tree') {
+                    if (!this.spritesLoaded || !this._renderTreeSprite(ctx, item.sx, item.sy, item.x, item.y)) {
+                        this._treeLarge(ctx, item.sx, item.sy - 4, item.x * 100 + item.y);
+                    }
+                } else if (item.kind === 'bld') {
+                    this.renderBuilding(ctx, item.x, item.y, item.building);
+                } else if (item.kind === 'ppl') {
+                    this._drawPerson(ctx, item.p, item.cx, item.cy);
+                }
+            } catch (e) {
+                // skip broken item, don't crash
+            }
+        }
 
         // === PASS 4: Butterflies ===
         try { this.renderButterflies(ctx); } catch(e) {}
@@ -11314,6 +13443,25 @@ const Renderer = {
 
         ctx.restore();
 
+        // === POST-PROCESSING ===
+        // Ambient pollen/dust motes (in screen space)
+        this.renderPollen(ctx, w, h);
+
+        // Warm global color overlay ("golden hour" atmosphere)
+        ctx.fillStyle = 'rgba(255,210,130,0.05)';
+        ctx.fillRect(0, 0, w, h);
+
+        // Soft vignette at corners for focus / photographic depth
+        const vg = ctx.createRadialGradient(
+            w * 0.5, h * 0.52, Math.min(w, h) * 0.3,
+            w * 0.5, h * 0.52, Math.max(w, h) * 0.75
+        );
+        vg.addColorStop(0, 'rgba(0,0,0,0)');
+        vg.addColorStop(0.7, 'rgba(20,15,10,0.08)');
+        vg.addColorStop(1, 'rgba(20,15,10,0.28)');
+        ctx.fillStyle = vg;
+        ctx.fillRect(0, 0, w, h);
+
         // Mini map
         this.renderMiniMap();
     },
@@ -11323,6 +13471,13 @@ const Renderer = {
             c.x += c.speed;
             if (c.x > w + 300) c.x = -c.w - 100;
 
+            // Soft shadow underneath cloud
+            ctx.fillStyle = `rgba(130,150,170,${c.opacity * 0.35})`;
+            ctx.beginPath();
+            ctx.ellipse(c.x, c.y + 6, c.w * 0.48, 9, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Main puffs
             ctx.fillStyle = `rgba(255,255,255,${c.opacity})`;
             ctx.beginPath();
             ctx.ellipse(c.x, c.y, c.w * 0.5, 12, 0, 0, Math.PI * 2);
@@ -11333,6 +13488,153 @@ const Renderer = {
             ctx.beginPath();
             ctx.ellipse(c.x + c.w * 0.25, c.y + 3, c.w * 0.3, 8, 0, 0, Math.PI * 2);
             ctx.fill();
+            // Top highlight rim (warm tint, sunward)
+            ctx.fillStyle = `rgba(255,240,200,${c.opacity * 0.6})`;
+            ctx.beginPath();
+            ctx.ellipse(c.x + c.w * 0.08, c.y - 3, c.w * 0.45, 4, 0, Math.PI, 0);
+            ctx.fill();
+        }
+    },
+
+    // Distant hills + mountain silhouettes behind the sky — provides horizon depth.
+    // Cached path, drawn at a fixed band above sea-level.
+    renderHorizon(ctx, w, h) {
+        const horizonY = h * 0.58;
+        // === Back layer: distant hazy mountains ===
+        ctx.fillStyle = 'rgba(140,168,190,0.55)';
+        ctx.beginPath();
+        ctx.moveTo(0, horizonY);
+        const seed = 97;
+        for (let i = 0; i <= 24; i++) {
+            const t = i / 24;
+            const px = t * w;
+            // Deterministic wavy profile
+            const a = Math.sin(t * 7.3 + seed) * 0.5 + Math.sin(t * 17.1 + seed * 1.3) * 0.3 + Math.sin(t * 31.7) * 0.2;
+            const py = horizonY - 28 - a * 22;
+            ctx.lineTo(px, py);
+        }
+        ctx.lineTo(w, horizonY);
+        ctx.closePath();
+        ctx.fill();
+
+        // === Mid layer: closer mountains (darker, more defined) ===
+        ctx.fillStyle = 'rgba(104,132,150,0.75)';
+        ctx.beginPath();
+        ctx.moveTo(0, horizonY);
+        for (let i = 0; i <= 22; i++) {
+            const t = i / 22;
+            const px = t * w;
+            const a = Math.sin(t * 5.1 + 2.3) * 0.5 + Math.sin(t * 13.7 + 4.1) * 0.4 + Math.sin(t * 23.3) * 0.15;
+            const py = horizonY - 14 - Math.max(0, a) * 18;
+            ctx.lineTo(px, py);
+        }
+        ctx.lineTo(w, horizonY);
+        ctx.closePath();
+        ctx.fill();
+        // Warm sun-kissed top rim on mid mountains
+        ctx.strokeStyle = 'rgba(255,220,170,0.35)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let i = 0; i <= 22; i++) {
+            const t = i / 22;
+            const px = t * w;
+            const a = Math.sin(t * 5.1 + 2.3) * 0.5 + Math.sin(t * 13.7 + 4.1) * 0.4 + Math.sin(t * 23.3) * 0.15;
+            const py = horizonY - 14 - Math.max(0, a) * 18;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        // === Front layer: tree-line silhouette ===
+        ctx.fillStyle = 'rgba(78,108,72,0.85)';
+        ctx.beginPath();
+        ctx.moveTo(0, horizonY);
+        for (let i = 0; i <= 36; i++) {
+            const t = i / 36;
+            const px = t * w;
+            const a = Math.sin(t * 19 + 1.1) * 0.5 + Math.sin(t * 43) * 0.3 + Math.sin(t * 71 + 0.7) * 0.2;
+            const py = horizonY - 4 - Math.max(0.2, a * 0.8 + 0.4) * 7;
+            ctx.lineTo(px, py);
+        }
+        ctx.lineTo(w, horizonY);
+        ctx.closePath();
+        ctx.fill();
+    },
+
+    // Small bird flocks that fly across the sky. Flaps wings via sine-driven V.
+    renderBirds(ctx, w, h) {
+        if (!this._birds) this._initBirds(w, h);
+        const anim = this.animTime;
+        for (const b of this._birds) {
+            b.x += b.vx;
+            b.y += Math.sin(anim * 0.8 + b.phase) * 0.15;
+            if (b.x > w + 60) { b.x = -60; b.y = 40 + Math.random() * (h * 0.3); }
+            if (b.x < -60) { b.x = w + 60; b.y = 40 + Math.random() * (h * 0.3); }
+
+            // Wing V (flap animation)
+            const flap = Math.sin(anim * 9 + b.phase) * 0.55 + 0.35;
+            const wspan = b.size;
+            ctx.strokeStyle = `rgba(30,30,35,${b.opacity})`;
+            ctx.lineWidth = b.size * 0.18;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(b.x - wspan, b.y + wspan * flap);
+            ctx.quadraticCurveTo(b.x - wspan * 0.4, b.y - wspan * flap * 0.3, b.x, b.y);
+            ctx.quadraticCurveTo(b.x + wspan * 0.4, b.y - wspan * flap * 0.3, b.x + wspan, b.y + wspan * flap);
+            ctx.stroke();
+            ctx.lineCap = 'butt';
+        }
+    },
+
+    _initBirds(w, h) {
+        this._birds = [];
+        for (let i = 0; i < 6; i++) {
+            this._birds.push({
+                x: Math.random() * w,
+                y: 30 + Math.random() * (h * 0.3),
+                vx: 0.25 + Math.random() * 0.35,
+                size: 3 + Math.random() * 2.5,
+                phase: Math.random() * Math.PI * 2,
+                opacity: 0.55 + Math.random() * 0.3,
+            });
+        }
+    },
+
+    // Ambient pollen/dust motes floating across screen (screen-space layer).
+    // Very subtle — adds "aliveness" to the air like Township's sunlit motes.
+    renderPollen(ctx, w, h) {
+        if (!this._pollen) this._initPollen(w, h);
+        const anim = this.animTime;
+        for (const p of this._pollen) {
+            p.x += p.vx;
+            p.y += p.vy + Math.sin(anim * p.bobFreq + p.phase) * 0.08;
+            if (p.x > w + 10) p.x = -10;
+            if (p.x < -10) p.x = w + 10;
+            if (p.y > h + 10) { p.y = -5; p.x = Math.random() * w; }
+            if (p.y < -10) p.y = h + 5;
+
+            // Twinkle factor (pulsing opacity)
+            const tw = 0.5 + Math.sin(anim * p.twinkleFreq + p.phase) * 0.5;
+            ctx.fillStyle = `rgba(255,245,200,${p.alpha * tw})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    _initPollen(w, h) {
+        this._pollen = [];
+        for (let i = 0; i < 45; i++) {
+            this._pollen.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                vx: (Math.random() - 0.5) * 0.18,
+                vy: -0.05 - Math.random() * 0.15,
+                size: 0.6 + Math.random() * 1.2,
+                alpha: 0.20 + Math.random() * 0.35,
+                phase: Math.random() * Math.PI * 2,
+                bobFreq: 0.8 + Math.random() * 1.2,
+                twinkleFreq: 1.5 + Math.random() * 2,
+            });
         }
     },
 

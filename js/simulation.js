@@ -275,6 +275,7 @@ const Simulation = {
     },
 
     processConstruction() {
+        const finishedCounts = {}; // bData.name -> count
         for (let y = 0; y < GameData.MAP_SIZE; y++) {
             for (let x = 0; x < GameData.MAP_SIZE; x++) {
                 const building = Game.map.buildings[y * GameData.MAP_SIZE + x];
@@ -284,13 +285,26 @@ const Simulation = {
                         building.buildTime = 0;
                         const bData = GameData.BUILDINGS[building.id];
                         if (bData) {
-                            UI.notify('🏗️ ' + bData.name + ' selesai dibangun!', 'success');
+                            finishedCounts[bData.name] = (finishedCounts[bData.name] || 0) + 1;
                             UI.addEventLog(bData.name + ' telah selesai dibangun.', 'positive');
                             Renderer.addParticle(x, y, 'build');
                         }
                     }
                 }
             }
+        }
+
+        // Emit at most ONE notification per tick. If multiple building types
+        // finished, show a compact summary; otherwise use the per-type message
+        // which will dedup-and-count across ticks.
+        const names = Object.keys(finishedCounts);
+        if (names.length === 1) {
+            const n = names[0];
+            const c = finishedCounts[n];
+            UI.notify('🏗️ ' + n + ' selesai dibangun!' + (c > 1 ? ' (' + c + ')' : ''), 'success');
+        } else if (names.length > 1) {
+            const total = names.reduce((s, k) => s + finishedCounts[k], 0);
+            UI.notify('🏗️ ' + total + ' bangunan selesai dibangun!', 'success');
         }
     },
 

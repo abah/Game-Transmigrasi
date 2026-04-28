@@ -36,6 +36,20 @@ const Renderer = {
     SPRITE_BASE_WIDTH: 100, // Kenney road pack tile width
     SPRITE_ANCHOR_Y: 25,    // Diamond center Y in 100×50 isometric diamond
 
+    // ----- Hand-painted Township-style building sprites -----
+    // Per-building metadata: where the front-bottom corner of the footprint
+    // diamond lies inside the sprite (anchor) and how many tiles wide the
+    // sprite should appear on screen. Anchor is in raw sprite pixels.
+    BUILDING_SPRITES: {
+        sekolah: {
+            key: 'b_sekolah',
+            // Sprite is 512×414. The front (south) corner of the 2×2
+            // foundation is roughly at the bottom-center of the trimmed sprite.
+            anchor: [256, 392],
+            fitWidthTiles: 2.4, // building+landscaping spans ~2.4 tile widths
+        },
+    },
+
     // ==============================
     //  CANCEL PLACEMENT
     // ==============================
@@ -181,6 +195,10 @@ const Renderer = {
             coniferAltTall: 'assets/sprites/trees/coniferAltTall.png',
             coniferShort: 'assets/sprites/trees/coniferShort.png',
             coniferAltShort: 'assets/sprites/trees/coniferAltShort.png',
+            // Buildings (Township-style hand-painted sprites; prefix b_ to avoid
+            // collision with terrain/tree keys). Loader is non-blocking — if a
+            // sprite fails, renderer falls back to procedural drawing.
+            b_sekolah: 'assets/sprites/buildings/sekolah.png',
         };
 
         return new Promise((resolve) => {
@@ -2857,6 +2875,86 @@ const Renderer = {
         ctx.closePath();
     },
 
+    // Render a hand-painted building sprite anchored at its front-bottom
+    // corner. Returns true if a sprite was rendered, false if no sprite is
+    // available (caller should fall back to procedural drawing).
+    _renderBuildingSprite(ctx, sx, sy, building, bData, progress) {
+        const meta = this.BUILDING_SPRITES && this.BUILDING_SPRITES[building.id];
+        if (!meta) return false;
+        const sprite = this.spriteImages[meta.key];
+        if (!sprite || !sprite.naturalWidth) return false;
+
+        const size = bData.size || 1;
+        const targetW = meta.fitWidthTiles * this.TW;
+        const scale = targetW / sprite.naturalWidth;
+        const dw = sprite.naturalWidth * scale;
+        const dh = sprite.naturalHeight * scale;
+        const ax = meta.anchor[0] * scale;
+        const ay = meta.anchor[1] * scale;
+
+        // Front (south) corner of the building's footprint diamond in screen
+        // coords — sprite's anchor point should land here.
+        const baseX = sx;
+        const baseY = sy + (size * this.TH) / 2;
+
+        // Soft drop shadow under the sprite (procedural, sun upper-left)
+        ctx.save();
+        const shW = size * this.TW * 0.95;
+        const shH = size * this.TH * 0.85;
+        const shX = sx + 4;
+        const shY = sy + 2;
+        const shGrad = ctx.createRadialGradient(shX, shY, 0, shX, shY, shW * 0.55);
+        shGrad.addColorStop(0, 'rgba(0,0,0,0.32)');
+        shGrad.addColorStop(0.6, 'rgba(0,0,0,0.18)');
+        shGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = shGrad;
+        ctx.beginPath();
+        ctx.ellipse(shX, shY, shW * 0.55, shH * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Construction progress: clip from the bottom up so building "rises"
+        // from the foundation as it builds.
+        if (progress < 1) {
+            ctx.save();
+            const visibleH = dh * progress;
+            ctx.beginPath();
+            ctx.rect(baseX - ax, baseY - ay + dh - visibleH, dw, visibleH);
+            ctx.clip();
+            ctx.drawImage(sprite, baseX - ax, baseY - ay, dw, dh);
+            ctx.restore();
+            // Faint full silhouette for "ghost" of finished form
+            ctx.save();
+            ctx.globalAlpha = 0.18;
+            ctx.drawImage(sprite, baseX - ax, baseY - ay, dw, dh);
+            ctx.restore();
+        } else {
+            ctx.drawImage(sprite, baseX - ax, baseY - ay, dw, dh);
+        }
+
+        // Night-time warm glow on windows (procedural overlay).
+        // Gameplay clock is 0..24 in Game.timeOfDay if available; otherwise
+        // skip. Future: per-window mask coordinates per sprite.
+        const tod = (typeof Game !== 'undefined' && Game.timeOfDay) || 12;
+        if (tod < 6 || tod > 18) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const flicker = 0.55 + Math.sin(this.animTime * 2.1) * 0.05;
+            const glow = ctx.createRadialGradient(baseX, baseY - dh * 0.55, 0,
+                                                   baseX, baseY - dh * 0.55, dw * 0.55);
+            glow.addColorStop(0, `rgba(255,210,120,${0.28 * flicker})`);
+            glow.addColorStop(0.6, `rgba(255,180,80,${0.10 * flicker})`);
+            glow.addColorStop(1, 'rgba(255,180,80,0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.ellipse(baseX, baseY - dh * 0.55, dw * 0.55, dh * 0.55, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        return true;
+    },
+
     _renderGrass(ctx, sx, sy, tw, th, tx, ty) {
         const rng = this._seededRandom(tx * 31 + ty * 17);
         const hw = tw / 2, hh = th / 2;
@@ -3524,6 +3622,16 @@ const Renderer = {
             // --- Universal per-instance seed (consistent per tile coord) ---
             // Used by helpers/renderers to randomize minor details per instance
             this._buildingSeed = (x * 2654435761 + y * 40503 + building.id.length * 97) >>> 0;
+
+            // --- Sprite-based render path (Township-quality hand-painted) ---
+            // If a building has a registered sprite and it has loaded, use the
+            // sprite renderer and skip procedural drawing entirely. Sprite has
+            // its own foundation/landscaping, so plinth & shadow are bundled
+            // inside _renderBuildingSprite.
+            if (this._renderBuildingSprite(ctx, sx, sy, building, bData, progress)) {
+                ctx.restore();
+                return;
+            }
 
             // --- Universal PRE-draw layers (Township-style framing) ---
             // Skip for tile-type and ground-level buildings that draw their own ground

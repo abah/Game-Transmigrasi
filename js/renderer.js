@@ -41,13 +41,179 @@ const Renderer = {
     // diamond lies inside the sprite (anchor) and how many tiles wide the
     // sprite should appear on screen. Anchor is in raw sprite pixels.
     BUILDING_SPRITES: {
+        // fitWidthTiles tuned so each sprite reads as roughly its footprint
+        // size + ~15-20% overhang. Keeps buildings visually proportional to
+        // roads / sawah / ladang (which respect tile bounds exactly).
         sekolah: {
             key: 'b_sekolah',
-            // Sprite is 512×414. The front (south) corner of the 2×2
-            // foundation is roughly at the bottom-center of the trimmed sprite.
             anchor: [256, 392],
-            fitWidthTiles: 2.4, // building+landscaping spans ~2.4 tile widths
+            fitWidthTiles: 2.2, // size=2
         },
+        rumah_transmigran: {
+            key: 'b_rumah_transmigran',
+            anchor: [248, 372],
+            fitWidthTiles: 1.2, // size=1
+        },
+        rumah_layak: {
+            key: 'b_rumah_layak',
+            anchor: [256, 350],
+            fitWidthTiles: 1.25, // size=1
+        },
+        masjid: {
+            key: 'b_masjid',
+            anchor: [256, 470],
+            fitWidthTiles: 1.3, // size=1 (slightly larger to fit dome height)
+        },
+        puskesmas: {
+            key: 'b_puskesmas',
+            anchor: [256, 340],
+            fitWidthTiles: 1.2, // size=1
+        },
+        pasar: {
+            key: 'b_pasar',
+            anchor: [256, 355],
+            fitWidthTiles: 1.25, // size=1
+        },
+        balai_desa: {
+            key: 'b_balai_desa',
+            anchor: [256, 375],
+            fitWidthTiles: 2.2, // size=2
+        },
+        gudang: {
+            key: 'b_gudang',
+            anchor: [256, 365],
+            fitWidthTiles: 1.2, // size=1
+        },
+        // ----- Stage 1 (Desa Berkembang) -----
+        peternakan: {
+            key: 'b_peternakan',
+            anchor: [256, 400],
+            fitWidthTiles: 1.25, // size=1
+        },
+        koperasi: {
+            key: 'b_koperasi',
+            anchor: [256, 430],
+            fitWidthTiles: 1.25, // size=1
+        },
+        taman: {
+            key: 'b_taman',
+            anchor: [256, 380],
+            fitWidthTiles: 1.2, // size=1, ground-level
+            noShadow: true,
+            noNightGlow: true,
+        },
+        perkebunan: {
+            key: 'b_perkebunan',
+            anchor: [256, 365],
+            fitWidthTiles: 2.2, // size=2
+            noNightGlow: true, // it's a plantation, no windows
+        },
+        // ----- Stage 2 (Kota Kecil) -----
+        perumahan: {
+            key: 'b_perumahan',
+            anchor: [256, 300],
+            fitWidthTiles: 2.2, // size=2
+        },
+        perikanan: {
+            key: 'b_perikanan',
+            anchor: [256, 300],
+            fitWidthTiles: 2.2, // size=2 fish pond, ground-level
+            noNightGlow: true, // open pond, no windows
+        },
+        smp: {
+            key: 'b_smp',
+            anchor: [256, 295],
+            fitWidthTiles: 2.2, // size=2
+        },
+        sma: {
+            key: 'b_sma',
+            anchor: [256, 320],
+            fitWidthTiles: 2.2, // size=2
+        },
+        pabrik: {
+            key: 'b_pabrik',
+            anchor: [256, 400],
+            fitWidthTiles: 2.2, // size=2 (taller stacks → larger anchor.y)
+        },
+        bank: {
+            key: 'b_bank',
+            anchor: [256, 355],
+            fitWidthTiles: 1.25, // size=1
+        },
+        // ----- Stage 3 (Kota Besar) -----
+        apartemen: {
+            key: 'b_apartemen',
+            anchor: [256, 425],
+            fitWidthTiles: 2.2, // size=2 (very tall mid-rise)
+        },
+        agro_industri: {
+            key: 'b_agro_industri',
+            anchor: [256, 315],
+            fitWidthTiles: 2.2, // size=2
+        },
+        universitas: {
+            key: 'b_universitas',
+            anchor: [256, 320],
+            fitWidthTiles: 3.2, // size=3
+        },
+        rumah_sakit: {
+            key: 'b_rumah_sakit',
+            anchor: [256, 305],
+            fitWidthTiles: 3.2, // size=3
+        },
+        taman_besar: {
+            key: 'b_taman_besar',
+            anchor: [256, 305],
+            fitWidthTiles: 3.2, // size=3, ground-level park
+            noShadow: true,
+            noNightGlow: true,
+        },
+        mall: {
+            key: 'b_mall',
+            anchor: [256, 315],
+            fitWidthTiles: 3.2, // size=3
+        },
+        pabrik_besar: {
+            key: 'b_pabrik_besar',
+            anchor: [256, 315],
+            fitWidthTiles: 3.2, // size=3
+        },
+        hotel: {
+            key: 'b_hotel',
+            anchor: [256, 355],
+            fitWidthTiles: 2.2, // size=2 (tall boutique hotel)
+        },
+        stasiun: {
+            key: 'b_stasiun',
+            anchor: [256, 305],
+            fitWidthTiles: 3.2, // size=3
+        },
+        // ----- Stage 4 (Metropolitan) -----
+        gedung_pencakar: {
+            key: 'b_gedung_pencakar',
+            anchor: [256, 315],
+            fitWidthTiles: 3.2, // size=3 (very tall skyscraper)
+        },
+        stadion: {
+            key: 'b_stadion',
+            anchor: [256, 315],
+            fitWidthTiles: 3.2, // size=3
+        },
+        bandara: {
+            key: 'b_bandara',
+            anchor: [256, 315],
+            fitWidthTiles: 4.2, // size=4 (largest footprint)
+        },
+        tol: {
+            key: 'b_tol',
+            anchor: [256, 330],
+            fitWidthTiles: 3.2, // size=3 (elevated highway with toll plaza)
+        },
+        // NOTE: sawah and ladang intentionally do NOT have sprite entries
+        // here. They fall through to the procedural _drawSawah / _drawLadang
+        // path, which is auto-tile aware: when an adjacent tile contains the
+        // same crop, the shared dyke/fence is suppressed so neighbouring
+        // plots merge into one continuous field instead of stacking.
     },
 
     // ==============================
@@ -189,16 +355,68 @@ const Renderer = {
             // Bridges
             bridgeEW: 'assets/sprites/roads/bridgeEW.png',
             bridgeNS: 'assets/sprites/roads/bridgeNS.png',
-            // Trees
+            // Trees (legacy Kenney + new Township-style hand-painted)
             treeTall: 'assets/sprites/trees/treeTall.png',
             coniferTall: 'assets/sprites/trees/coniferTall.png',
             coniferAltTall: 'assets/sprites/trees/coniferAltTall.png',
             coniferShort: 'assets/sprites/trees/coniferShort.png',
             coniferAltShort: 'assets/sprites/trees/coniferAltShort.png',
+            t_palm: 'assets/sprites/trees/palm.png',
+            t_mango: 'assets/sprites/trees/mango.png',
+            t_banyan: 'assets/sprites/trees/banyan.png',
+            t_bush: 'assets/sprites/trees/bush.png',
+            // Hand-painted terrain textures (Township-style)
+            t_grass: 'assets/sprites/terrain/grass-painted.png',
+            t_water: 'assets/sprites/terrain/water-painted.png',
             // Buildings (Township-style hand-painted sprites; prefix b_ to avoid
             // collision with terrain/tree keys). Loader is non-blocking — if a
             // sprite fails, renderer falls back to procedural drawing.
             b_sekolah: 'assets/sprites/buildings/sekolah.png',
+            b_rumah_transmigran: 'assets/sprites/buildings/rumah_transmigran.png',
+            b_rumah_layak: 'assets/sprites/buildings/rumah_layak.png',
+            b_masjid: 'assets/sprites/buildings/masjid.png',
+            b_puskesmas: 'assets/sprites/buildings/puskesmas.png',
+            b_pasar: 'assets/sprites/buildings/pasar.png',
+            b_balai_desa: 'assets/sprites/buildings/balai_desa.png',
+            b_gudang: 'assets/sprites/buildings/gudang.png',
+            b_sawah: 'assets/sprites/buildings/sawah.png',
+            b_ladang: 'assets/sprites/buildings/ladang.png',
+            // Stage 1 (Desa Berkembang) buildings
+            b_peternakan: 'assets/sprites/buildings/peternakan.png',
+            b_koperasi: 'assets/sprites/buildings/koperasi.png',
+            b_taman: 'assets/sprites/buildings/taman.png',
+            b_perkebunan: 'assets/sprites/buildings/perkebunan.png',
+            // Stage 2 (Kota Kecil) buildings
+            b_perumahan: 'assets/sprites/buildings/perumahan.png',
+            b_perikanan: 'assets/sprites/buildings/perikanan.png',
+            b_smp: 'assets/sprites/buildings/smp.png',
+            b_sma: 'assets/sprites/buildings/sma.png',
+            b_pabrik: 'assets/sprites/buildings/pabrik.png',
+            b_bank: 'assets/sprites/buildings/bank.png',
+            // Stage 3 (Kota Besar) buildings
+            b_apartemen: 'assets/sprites/buildings/apartemen.png',
+            b_agro_industri: 'assets/sprites/buildings/agro_industri.png',
+            b_universitas: 'assets/sprites/buildings/universitas.png',
+            b_rumah_sakit: 'assets/sprites/buildings/rumah_sakit.png',
+            b_taman_besar: 'assets/sprites/buildings/taman_besar.png',
+            b_mall: 'assets/sprites/buildings/mall.png',
+            b_pabrik_besar: 'assets/sprites/buildings/pabrik_besar.png',
+            b_hotel: 'assets/sprites/buildings/hotel.png',
+            b_stasiun: 'assets/sprites/buildings/stasiun.png',
+            // Stage 4 (Metropolitan) buildings
+            b_gedung_pencakar: 'assets/sprites/buildings/gedung_pencakar.png',
+            b_stadion: 'assets/sprites/buildings/stadion.png',
+            b_bandara: 'assets/sprites/buildings/bandara.png',
+            b_tol: 'assets/sprites/buildings/tol.png',
+            // Terrain textures
+            t_ladang: 'assets/sprites/terrain/ladang-painted.png',
+            // Modern Township roads (straights + 2 corners + cross + bridge).
+            // SW corner = vertical flip of NE; NW corner = horizontal flip of ES.
+            mroadEW: 'assets/sprites/roads/modern-ew.png',
+            mroadNE: 'assets/sprites/roads/modern-NE.png',
+            mroadES: 'assets/sprites/roads/modern-ES.png',
+            mroadCross: 'assets/sprites/roads/modern-cross.png',
+            mbridge: 'assets/sprites/roads/modern-bridge.png',
         };
 
         return new Promise((resolve) => {
@@ -283,12 +501,162 @@ const Renderer = {
         return spriteMap[key] || 'roadSingle';
     },
 
-    // Render road tile with auto-tiling
+    // Render road tile with auto-tiling. Disabled the sprite path entirely —
+    // it caused tile-boundary seams and didn't tile cleanly. The procedural
+    // _renderRoad (called from the fallback in renderTile) handles all 16
+    // NESW patterns with continuous geometry.
     _renderRoadWithSprites(ctx, sx, sy, tx, ty) {
-        const spriteKey = this._getRoadSpriteKey(tx, ty);
-        if (this._drawTerrainSprite(ctx, sx, sy, spriteKey)) return true;
-        // Fallback
-        return this._drawTerrainSprite(ctx, sx, sy, 'roadSingle');
+        return false;
+    },
+
+    // Draw a modern Township road tile inside the diamond. Pattern code uses
+    // Kenney axis convention: N=upper-left edge, E=upper-right edge,
+    // S=lower-right edge, W=lower-left edge.
+    //
+    // We use four hand-painted master sprites (EW straight, NE corner, ES
+    // corner, 4-way cross) plus simple horizontal/vertical screen-flips to
+    // derive the remaining orientations:
+    //   NS straight  = horizontal flip of EW
+    //   SW corner    = vertical flip of NE (top-half road → bottom-half road)
+    //   NW corner    = horizontal flip of ES (right-half road → left-half road)
+    // These flips don't distort the 2:1 aspect ratio of the sprite, unlike a
+    // 90° canvas rotation, so the road geometry stays correct.
+    _drawModernRoad(ctx, sx, sy, code) {
+        const ew = this.spriteImages.mroadEW;
+        const ne = this.spriteImages.mroadNE;
+        const es = this.spriteImages.mroadES;
+        const cross = this.spriteImages.mroadCross;
+        if (!ew || !ne || !es || !cross) return false;
+
+        let sprite = null, flipH = false, flipV = false;
+        switch (code) {
+            // Straights
+            case 'EW': sprite = ew; break;                       // "/" direction
+            case 'NS': sprite = ew; flipH = true; break;         // "\" direction
+            // Corners
+            case 'NE': sprite = ne; break;                       // top half
+            case 'SW': sprite = ne; flipV = true; break;         // bottom half
+            case 'ES': sprite = es; break;                       // right half
+            case 'NW': sprite = es; flipH = true; break;         // left half
+            // 4-way
+            case 'NESW': sprite = cross; break;
+            // T-junctions: use 4-way cross (visual approximation; one arm just
+            // doesn't lead anywhere). Connectivity is still correct because the
+            // cross has road on all 4 sides.
+            case 'NES': case 'NEW': case 'NSW': case 'ESW': sprite = cross; break;
+            // Dead ends: pick the straight that aligns with the live neighbor
+            case 'N': case 'S': sprite = ew; flipH = true; break;
+            case 'E': case 'W': sprite = ew; break;
+            // Isolated single tile
+            case '': sprite = cross; break;
+            default: sprite = cross;
+        }
+
+        const tw = this.TW, th = this.TH;
+        ctx.save();
+        // Clip to tile diamond so the source image's grass fringe doesn't leak
+        // outside the tile. Inside-diamond grass (around the curve) stays
+        // visible because it's part of the painted sprite content.
+        this._tileDiamond(ctx, sx, sy, tw, th);
+        ctx.clip();
+        ctx.translate(sx, sy);
+        if (flipH) ctx.scale(-1, 1);
+        if (flipV) ctx.scale(1, -1);
+        ctx.drawImage(sprite, -tw / 2, -th / 2, tw, th);
+        ctx.restore();
+        return true;
+    },
+
+    // Draw a modern bridge tile (replaces old wooden bridge). Returns true if
+    // a sprite was drawn.
+    _drawModernBridge(ctx, sx, sy, tx, ty) {
+        const sprite = this.spriteImages.mbridge;
+        if (!sprite) return false;
+        // Detect bridge orientation by neighbor analysis (same as road)
+        const e = this._isBridgeOrRoadTile(tx, ty - 1);
+        const w = this._isBridgeOrRoadTile(tx, ty + 1);
+        const flipH = !(e || w); // if no E/W neighbor → assume NS bridge
+
+        const tw = this.TW, th = this.TH;
+        ctx.save();
+        this._tileDiamond(ctx, sx, sy, tw, th);
+        ctx.clip();
+        ctx.translate(sx, sy);
+        if (flipH) ctx.scale(-1, 1);
+        ctx.drawImage(sprite, -tw / 2, -th / 2, tw, th);
+        ctx.restore();
+        return true;
+    },
+
+    _isBridgeOrRoadTile(x, y) {
+        const size = GameData.MAP_SIZE;
+        if (x < 0 || y < 0 || x >= size || y >= size) return false;
+        const tt = Game.map.tiles[y * size + x];
+        return tt === GameData.TILE.ROAD || tt === GameData.TILE.BRIDGE;
+    },
+
+    // Check if a grid cell hosts a building of the given id (e.g. 'sawah',
+    // 'ladang'). Used by auto-tile farm drawers to detect adjacent plots of
+    // the same kind so embankments / fences on shared edges can be skipped.
+    _isFarmTile(tx, ty, kind) {
+        const size = GameData.MAP_SIZE;
+        if (tx < 0 || ty < 0 || tx >= size || ty >= size) return false;
+        const b = Game.map.buildings[ty * size + tx];
+        return !!(b && b.id === kind);
+    },
+
+    // Modern bridge for the 'jembatan' building (called from _drawJembatan).
+    // Detects orientation via road/bridge neighbors. Animates a subtle shadow
+    // shimmer beneath the deck. Returns true if drawn.
+    _drawModernBridgeBuilding(ctx, sx, sy, tx, ty, progress) {
+        const sprite = this.spriteImages.mbridge;
+        if (!sprite) return false;
+
+        // Orientation: prefer existing road/bridge neighbor axis. Fallback EW.
+        const hasLeft  = this._isBridgeOrRoadTile(tx - 1, ty); // S→N axis end
+        const hasRight = this._isBridgeOrRoadTile(tx + 1, ty);
+        const hasUp    = this._isBridgeOrRoadTile(tx, ty - 1);
+        const hasDown  = this._isBridgeOrRoadTile(tx, ty + 1);
+        const isVert = (hasUp || hasDown) && !(hasLeft || hasRight);
+
+        const tw = this.TW, th = this.TH;
+
+        // Animated water shimmer behind the deck — full tile diamond
+        const t = this.animTime || 0;
+        const shim = 0.25 + 0.08 * Math.sin(t * 1.5 + sx * 0.1);
+        ctx.save();
+        this._tileDiamond(ctx, sx, sy, tw, th);
+        ctx.clip();
+        ctx.fillStyle = `rgba(70, 150, 200, ${shim})`;
+        ctx.fillRect(sx - tw / 2, sy - th / 2, tw, th);
+        ctx.restore();
+
+        // Construction progress: clip from the bottom up
+        const p = Math.max(0, Math.min(1, progress == null ? 1 : progress));
+        ctx.save();
+        this._tileDiamond(ctx, sx, sy, tw, th);
+        ctx.clip();
+        if (p < 1) {
+            const top = sy - th / 2;
+            const visibleH = th * p;
+            ctx.beginPath();
+            ctx.rect(sx - tw, top + (th - visibleH), tw * 2, visibleH + th);
+            ctx.clip();
+        }
+        ctx.translate(sx, sy);
+        if (isVert) ctx.scale(-1, 1);
+        ctx.drawImage(sprite, -tw / 2, -th / 2, tw, th);
+        ctx.restore();
+
+        // Subtle directional shadow under bridge edges (procedural overlay)
+        ctx.save();
+        this._tileDiamond(ctx, sx, sy, tw, th);
+        ctx.clip();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.10)';
+        ctx.fillRect(sx - tw / 2, sy + th * 0.18, tw, th * 0.06);
+        ctx.restore();
+
+        return true;
     },
 
     // Rich grass detail overlay (on top of sprite) — world-class realism
@@ -544,28 +912,37 @@ const Renderer = {
 
             // Each tree gets a fresh type roll for maximum variety
             const typeRoll = rng();
+            const subRng = this._seededRandom(tx * 200 + ty * 300 + t * 77);
 
-            if (isSecondary && rng() > 0.4) {
-                // Secondary trees are often smaller bushes/undergrowth
-                this._treeBush(ctx, px, py, this._seededRandom(tx * 200 + ty * 300 + t * 77), anim);
-            } else if (typeRoll < 0.32) {
-                // What used to be sprite-based trees (treeTall, conifer variants)
-                // now uses the fully-drawn canvas conifer for consistent lighting.
-                this._treeLargeConifer(ctx, px, py, this._seededRandom(tx * 53 + ty * 79 + t * 99), anim);
-            } else if (typeRoll < 0.44) {
-                this._treeBanyan(ctx, px, py, this._seededRandom(tx * 71 + ty * 97 + t * 99), anim);
-            } else if (typeRoll < 0.54) {
-                this._treeBirch(ctx, px, py, this._seededRandom(tx * 73 + ty * 101 + t * 99), anim);
-            } else if (typeRoll < 0.64) {
-                this._treeBamboo(ctx, px, py, this._seededRandom(tx * 79 + ty * 103 + t * 99), anim);
-            } else if (typeRoll < 0.74) {
-                this._treeFlowering(ctx, px, py, this._seededRandom(tx * 83 + ty * 107 + t * 99), anim);
-            } else if (typeRoll < 0.84) {
-                this._treeAcacia(ctx, px, py, this._seededRandom(tx * 89 + ty * 109 + t * 99), anim);
-            } else if (typeRoll < 0.92) {
-                this._treeLargeRound(ctx, px, py, this._seededRandom(tx * 93 + ty * 113 + t * 99), anim);
-            } else {
-                this._treeLargeConifer(ctx, px, py, this._seededRandom(tx * 97 + ty * 117 + t * 99), anim);
+            // Prefer Township-style hand-painted sprites when available.
+            // Spread across 4 species + bush. Falls back to canvas tree if a
+            // sprite hasn't loaded yet.
+            let drawn = false;
+            if (this.spritesLoaded) {
+                if (isSecondary && rng() > 0.35) {
+                    drawn = this._drawTownshipTree(ctx, px, py, 't_bush', subRng, anim, { h: 22 });
+                } else if (typeRoll < 0.30) {
+                    drawn = this._drawTownshipTree(ctx, px, py, 't_palm', subRng, anim, { h: 52 });
+                } else if (typeRoll < 0.55) {
+                    drawn = this._drawTownshipTree(ctx, px, py, 't_mango', subRng, anim, { h: 44 });
+                } else if (typeRoll < 0.75) {
+                    drawn = this._drawTownshipTree(ctx, px, py, 't_banyan', subRng, anim, { h: 50 });
+                } else {
+                    drawn = this._drawTownshipTree(ctx, px, py, 't_bush', subRng, anim, { h: 28 });
+                }
+            }
+
+            if (!drawn) {
+                // Fallback: canvas tree (preserves variety while sprites load)
+                if (typeRoll < 0.35) {
+                    this._treeLargeConifer(ctx, px, py, subRng, anim);
+                } else if (typeRoll < 0.55) {
+                    this._treeBanyan(ctx, px, py, subRng, anim);
+                } else if (typeRoll < 0.75) {
+                    this._treeFlowering(ctx, px, py, subRng, anim);
+                } else {
+                    this._treeBush(ctx, px, py, subRng, anim);
+                }
             }
         }
 
@@ -590,6 +967,50 @@ const Renderer = {
                 }
             }
         }
+
+        return true;
+    },
+
+    // ----- Township-style hand-painted tree sprite ------
+    // (px, py) is the ground point where the tree base sits.
+    _drawTownshipTree(ctx, px, py, spriteKey, rng, anim, opts = {}) {
+        const sprite = this.spriteImages[spriteKey];
+        if (!sprite || !sprite.naturalWidth) return false;
+
+        // Per-instance scale variation & phase offset (so neighbouring trees
+        // don't sway in lockstep)
+        const targetH = (opts.h || 36) + rng() * 10;
+        const scale = targetH / sprite.height;
+        const w = sprite.width * scale;
+        const h = sprite.height * scale;
+        const phase = px * 0.07 + py * 0.09 + rng() * 6;
+
+        // Wind sway — skew (top leans) + tiny x-translate of canopy. Canopy
+        // sways more than trunk: implemented via per-stripe transformation in
+        // a single scaled drawImage with skew along Y.
+        const swayX = Math.sin(anim * 0.9 + phase) * 1.6;
+        const swaySkew = Math.sin(anim * 0.7 + phase + 0.4) * 0.05;
+
+        // Soft directional drop shadow under canopy (sun upper-left). Shadow
+        // breathes slightly with the canopy sway.
+        const shOff = swayX * 0.3;
+        const shGrad = ctx.createRadialGradient(px + 3 + shOff, py + 2, 0, px + 3 + shOff, py + 2, w * 0.5);
+        shGrad.addColorStop(0, 'rgba(0,0,0,0.32)');
+        shGrad.addColorStop(0.6, 'rgba(0,0,0,0.14)');
+        shGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = shGrad;
+        ctx.beginPath();
+        ctx.ellipse(px + 3 + shOff, py + 2, w * 0.46, h * 0.10, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw sprite with sway skew. Anchor: bottom-center of sprite ~ ground.
+        // Skew ranges: -0.05..0.05 → top edge offset by ~h*0.05 = 2-3 px on a
+        // 50px tall canopy. Visible but not jarring.
+        ctx.save();
+        ctx.translate(px + swayX * 0.15, py + 2);
+        ctx.transform(1, 0, swaySkew, 1, 0, 0);
+        ctx.drawImage(sprite, -w / 2, -h, w, h);
+        ctx.restore();
 
         return true;
     },
@@ -2897,21 +3318,24 @@ const Renderer = {
         const baseX = sx;
         const baseY = sy + (size * this.TH) / 2;
 
-        // Soft drop shadow under the sprite (procedural, sun upper-left)
-        ctx.save();
-        const shW = size * this.TW * 0.95;
-        const shH = size * this.TH * 0.85;
-        const shX = sx + 4;
-        const shY = sy + 2;
-        const shGrad = ctx.createRadialGradient(shX, shY, 0, shX, shY, shW * 0.55);
-        shGrad.addColorStop(0, 'rgba(0,0,0,0.32)');
-        shGrad.addColorStop(0.6, 'rgba(0,0,0,0.18)');
-        shGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = shGrad;
-        ctx.beginPath();
-        ctx.ellipse(shX, shY, shW * 0.55, shH * 0.55, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        // Soft drop shadow under the sprite (procedural, sun upper-left).
+        // Skip for ground-level plots like sawah/ladang.
+        if (!meta.noShadow) {
+            ctx.save();
+            const shW = size * this.TW * 0.95;
+            const shH = size * this.TH * 0.85;
+            const shX = sx + 4;
+            const shY = sy + 2;
+            const shGrad = ctx.createRadialGradient(shX, shY, 0, shX, shY, shW * 0.55);
+            shGrad.addColorStop(0, 'rgba(0,0,0,0.32)');
+            shGrad.addColorStop(0.6, 'rgba(0,0,0,0.18)');
+            shGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = shGrad;
+            ctx.beginPath();
+            ctx.ellipse(shX, shY, shW * 0.55, shH * 0.55, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
 
         // Construction progress: clip from the bottom up so building "rises"
         // from the foundation as it builds.
@@ -2936,7 +3360,7 @@ const Renderer = {
         // Gameplay clock is 0..24 in Game.timeOfDay if available; otherwise
         // skip. Future: per-window mask coordinates per sprite.
         const tod = (typeof Game !== 'undefined' && Game.timeOfDay) || 12;
-        if (tod < 6 || tod > 18) {
+        if (!meta.noNightGlow && (tod < 6 || tod > 18)) {
             ctx.save();
             ctx.globalCompositeOperation = 'lighter';
             const flicker = 0.55 + Math.sin(this.animTime * 2.1) * 0.05;
@@ -2959,18 +3383,50 @@ const Renderer = {
         const rng = this._seededRandom(tx * 31 + ty * 17);
         const hw = tw / 2, hh = th / 2;
 
-        // --- Per-tile color variation (subtle, so neighboring tiles blend) ---
-        const hueShift = (rng() - 0.5) * 7;     // ±7 (was ±15) — less patchwork
-        const valShift = (rng() - 0.5) * 5;      // ±5 (was ±12) — less brightness swing
+        // ----- Hand-painted Township texture path -----
+        // Use the painted grass sprite clipped to the tile diamond. This
+        // eliminates per-tile color variation (the source of the visible grid)
+        // and gives a continuous lawn-like surface across many tiles.
+        const grassSprite = this.spriteImages.t_grass;
+        if (grassSprite && grassSprite.naturalWidth) {
+            ctx.save();
+            this._tileDiamond(ctx, sx, sy, tw, th);
+            ctx.clip();
+            // Per-tile orientation flip so identical texture isn't visible as
+            // a repeating pattern. Position offset uses (tx, ty) to "scroll"
+            // the texture so each tile shows a different region of it.
+            const orient = Math.floor(rng() * 4);
+            ctx.translate(sx, sy);
+            if (orient === 1) ctx.scale(-1, 1);
+            else if (orient === 2) ctx.scale(1, -1);
+            else if (orient === 3) ctx.scale(-1, -1);
+            // Texture offset within the sprite, per tile, to mask repetition
+            const sw = grassSprite.naturalWidth;
+            const sh = grassSprite.naturalHeight;
+            const ox = Math.floor(rng() * (sw - tw - 8));
+            const oy = Math.floor(rng() * (sh - th - 8));
+            const dw = tw * 1.08, dh = th * 1.08; // slight oversize to hide seams
+            ctx.drawImage(grassSprite, ox, oy, tw + 8, th + 8,
+                          -dw / 2, -dh / 2, dw, dh);
+            ctx.restore();
+            // Add overlay decorations that span tile boundaries (handled
+            // separately in _addGrassDetails when called by tile-rendering
+            // path that wants extra detail). For most cases, the painted
+            // texture has enough variation already.
+            return;
+        }
+
+        // ----- Fallback: procedural canvas drawing -----
+        const hueShift = (rng() - 0.5) * 7;
+        const valShift = (rng() - 0.5) * 5;
         const baseR = Math.round(78 + hueShift * 0.3 + valShift);
         const baseG = Math.round(175 + hueShift + valShift);
         const baseB = Math.round(62 + hueShift * 0.2);
 
-        // --- Flatter gradient (Township-style even lighting, no hard corner) ---
         const g = ctx.createLinearGradient(sx - hw, sy - hh, sx + hw * 0.5, sy + hh * 0.5);
-        g.addColorStop(0, `rgb(${baseR + 6},${baseG + 8},${baseB + 3})`);   // was +18,+22,+8
+        g.addColorStop(0, `rgb(${baseR + 6},${baseG + 8},${baseB + 3})`);
         g.addColorStop(0.5, `rgb(${baseR},${baseG},${baseB})`);
-        g.addColorStop(1, `rgb(${Math.max(0, baseR - 4)},${Math.max(0, baseG - 5)},${Math.max(0, baseB - 2)})`);   // was -12,-15,-8
+        g.addColorStop(1, `rgb(${Math.max(0, baseR - 4)},${Math.max(0, baseG - 5)},${Math.max(0, baseB - 2)})`);
         this._tileDiamond(ctx, sx, sy, tw, th);
         ctx.fillStyle = g;
         ctx.fill();
@@ -3175,6 +3631,92 @@ const Renderer = {
         const t = this.animTime;
         const hw = tw / 2, hh = th / 2;
 
+        // ----- Hand-painted Township texture path -----
+        const waterSprite = this.spriteImages.t_water;
+        if (waterSprite && waterSprite.naturalWidth) {
+            const tileRng = this._seededRandom(tx * 41 + ty * 23);
+            ctx.save();
+            this._tileDiamond(ctx, sx, sy, tw, th);
+            ctx.clip();
+
+            // 1) Static painted base — texture offset & flip per tile
+            const orient = Math.floor(tileRng() * 4);
+            ctx.save();
+            ctx.translate(sx, sy);
+            if (orient === 1) ctx.scale(-1, 1);
+            else if (orient === 2) ctx.scale(1, -1);
+            else if (orient === 3) ctx.scale(-1, -1);
+            const sw = waterSprite.naturalWidth;
+            const sh = waterSprite.naturalHeight;
+            const ox = Math.floor(tileRng() * (sw - tw - 8));
+            const oy = Math.floor(tileRng() * (sh - th - 8));
+            const dw = tw * 1.08, dh = th * 1.08;
+            ctx.drawImage(waterSprite, ox, oy, tw + 8, th + 8,
+                          -dw / 2, -dh / 2, dw, dh);
+            ctx.restore();
+
+            // 2) Animated wave ripples (3 layers, additive)
+            const w1 = Math.sin(t * 1.2 + tx * 0.8 + ty * 0.6);
+            const w2 = Math.sin(t * 0.9 - tx * 0.5 + ty * 1.1);
+            const w3 = Math.sin(t * 1.8 + tx * 0.3 - ty * 0.9);
+            ctx.globalCompositeOperation = 'lighter';
+            for (let layer = 0; layer < 3; layer++) {
+                const speed = 0.8 + layer * 0.5;
+                const phase = t * speed + tx * 0.6 + ty * 0.4 + layer * 1.7;
+                const amp = 1.4 + layer * 0.4;
+                const alpha = 0.10 + Math.abs(w1) * 0.05 - layer * 0.025;
+                ctx.strokeStyle = `rgba(255,255,255,${Math.max(0.04, alpha)})`;
+                ctx.lineWidth = 0.55 + layer * 0.15;
+                ctx.beginPath();
+                for (let dx = -hw; dx <= hw; dx += 2) {
+                    const wy = sy + Math.sin(phase + dx * 0.18) * amp + (layer - 1) * 5 + w2 * 1.2;
+                    if (dx === -hw) ctx.moveTo(sx + dx, wy);
+                    else ctx.lineTo(sx + dx, wy);
+                }
+                ctx.stroke();
+            }
+
+            // 3) Sun glint — bright moving sparkle (upper-left bias)
+            const glintA = 0.35 + Math.sin(t * 1.6 + tx + ty) * 0.18;
+            ctx.fillStyle = `rgba(255,250,220,${Math.max(0.18, glintA)})`;
+            const gx = sx - hw * 0.25 + Math.sin(t * 0.7 + tx) * 1.5;
+            const gy = sy - hh * 0.35 + Math.cos(t * 0.5 + ty) * 0.8;
+            ctx.beginPath();
+            ctx.ellipse(gx, gy, 4.5 + Math.abs(w3) * 0.8, 0.9, -0.2, 0, Math.PI * 2);
+            ctx.fill();
+            // Smaller secondary sparkles
+            for (let s = 0; s < 2; s++) {
+                const sa = 0.15 + Math.sin(t * 2.1 + s * 3.7 + tx + ty) * 0.10;
+                if (sa < 0.05) continue;
+                const sx2 = sx + Math.sin(t * 0.8 + s * 2.3 + tx) * hw * 0.5;
+                const sy2 = sy + Math.cos(t * 0.6 + s * 1.9 + ty) * hh * 0.4;
+                ctx.fillStyle = `rgba(255,250,220,${sa})`;
+                ctx.beginPath();
+                ctx.arc(sx2, sy2, 1.2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 4) Caustics (dancing light patches under water)
+            const cRng = this._seededRandom(tx * 47 + ty * 89);
+            for (let i = 0; i < 3; i++) {
+                const baseX = (cRng() - 0.5) * tw * 0.7;
+                const baseY = (cRng() - 0.5) * th * 0.55;
+                const cx = sx + baseX + Math.sin(t * 1.5 + i * 2.3) * 2.5;
+                const cy = sy + baseY + Math.cos(t * 1.2 + i * 1.7) * 1.2;
+                const cr = 2 + cRng() * 2.5 + Math.sin(t * 2 + i) * 0.6;
+                const ca = 0.05 + Math.sin(t * 1.8 + i * 1.3) * 0.025;
+                if (ca < 0.02) continue;
+                ctx.fillStyle = `rgba(200,240,255,${ca})`;
+                ctx.beginPath();
+                ctx.ellipse(cx, cy, cr, cr * 0.55, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+            return;
+        }
+
+        // ----- Fallback: procedural canvas drawing -----
         // Check depth (surrounded by more water = deeper)
         const size = GameData.MAP_SIZE;
         let waterNeighbors = 0;
@@ -3485,31 +4027,74 @@ const Renderer = {
         ctx.stroke();
     },
 
+    // Modern asphalt road. Auto-tiles by drawing the white kerb only on the
+    // OUTER edges of the diamond that meet a non-road tile. Asphalt always
+    // fills the whole diamond, so adjacent road tiles merge into one
+    // continuous surface (no internal seams) — and the kerb wraps around the
+    // road network like a single painted edge.
     _renderRoad(ctx, sx, sy, tw, th, tx, ty) {
-        // Asphalt
-        const g = ctx.createLinearGradient(sx - tw/2, sy, sx + tw/2, sy);
-        g.addColorStop(0, '#7a8088');
-        g.addColorStop(0.5, '#8a9098');
-        g.addColorStop(1, '#727880');
+        const hw = tw / 2, hh = th / 2;
+        const n = this._isRoadTile(tx - 1, ty);
+        const e = this._isRoadTile(tx, ty - 1);
+        const s = this._isRoadTile(tx + 1, ty);
+        const w = this._isRoadTile(tx, ty + 1);
+
+        // Diamond corner points
+        const top = [sx, sy - hh];
+        const right = [sx + hw, sy];
+        const bot = [sx, sy + hh];
+        const left = [sx - hw, sy];
+
+        ctx.save();
         this._tileDiamond(ctx, sx, sy, tw, th);
-        ctx.fillStyle = g;
-        ctx.fill();
+        ctx.clip();
 
-        // Road edge
-        ctx.strokeStyle = 'rgba(100,108,115,0.6)';
-        ctx.lineWidth = 1;
-        this._tileDiamond(ctx, sx, sy, tw * 0.92, th * 0.92);
-        ctx.stroke();
+        // 1) Soft asphalt base with a slight diagonal gradient so straight
+        //    runs read as a single shaded surface (not flat boxes).
+        const ag = ctx.createLinearGradient(sx - hw, sy - hh, sx + hw, sy + hh);
+        ag.addColorStop(0, '#42424a');
+        ag.addColorStop(0.5, '#37373e');
+        ag.addColorStop(1, '#2e2e34');
+        ctx.fillStyle = ag;
+        ctx.fillRect(sx - hw, sy - hh, tw, th);
 
-        // Center line (dashed)
-        ctx.strokeStyle = 'rgba(220,210,150,0.3)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
+        // 2) Faint asphalt grain — a few seeded specks for texture
+        const seed = (tx * 73856093) ^ (ty * 19349663);
+        const rng = this._seededRandom(seed >>> 0);
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        for (let i = 0; i < 6; i++) {
+            const px = sx - hw + rng() * tw;
+            const py = sy - hh + rng() * th;
+            ctx.fillRect(px, py, 1, 1);
+        }
+        ctx.fillStyle = 'rgba(0,0,0,0.10)';
+        for (let i = 0; i < 4; i++) {
+            const px = sx - hw + rng() * tw;
+            const py = sy - hh + rng() * th;
+            ctx.fillRect(px, py, 1, 1);
+        }
+
+        ctx.restore();
+
+        // 3) Kerb stripes along OUTER edges only — drawn outside the clip so
+        //    the line caps round off cleanly at the diamond corners.
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#e8e8ee';
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.moveTo(sx - 6, sy + 3);
-        ctx.lineTo(sx + 6, sy - 3);
+        // Kenney edge → diamond edge mapping:
+        //   N edge = top↔left segment   (upper-left side of diamond)
+        //   E edge = top↔right segment  (upper-right side)
+        //   S edge = right↔bot segment  (lower-right side)
+        //   W edge = bot↔left segment   (lower-left side)
+        if (!n) { ctx.moveTo(top[0], top[1]);   ctx.lineTo(left[0], left[1]); }
+        if (!e) { ctx.moveTo(top[0], top[1]);   ctx.lineTo(right[0], right[1]); }
+        if (!s) { ctx.moveTo(right[0], right[1]); ctx.lineTo(bot[0], bot[1]); }
+        if (!w) { ctx.moveTo(bot[0], bot[1]);   ctx.lineTo(left[0], left[1]); }
         ctx.stroke();
-        ctx.setLineDash([]);
+        ctx.restore();
     },
 
     _renderFarmland(ctx, sx, sy, tw, th, tx, ty) {
@@ -3622,6 +4207,13 @@ const Renderer = {
             // --- Universal per-instance seed (consistent per tile coord) ---
             // Used by helpers/renderers to randomize minor details per instance
             this._buildingSeed = (x * 2654435761 + y * 40503 + building.id.length * 97) >>> 0;
+            // Expose building size so flat tile-overlay drawers (sawah/ladang)
+            // can scale their geometry properly when size > 1.
+            this._currentBuildingSize = bData.size || 1;
+            // Expose tile coords so auto-tile drawers (sawah/ladang) can
+            // probe their neighbours and merge with adjacent same-kind plots.
+            this._currentTileX = x;
+            this._currentTileY = y;
 
             // --- Sprite-based render path (Township-quality hand-painted) ---
             // If a building has a registered sprite and it has loaded, use the
@@ -4664,21 +5256,33 @@ const Renderer = {
     _drawSawah(ctx, sx, sy, p) {
         if (p < 1) return;
         const anim = this.animTime || 0;
+        // Building footprint scale (1 = 1 tile, 2 = 2×2 tiles). Wrap the entire
+        // drawing in a transform that scales everything around (sx, sy) so the
+        // sawah visually fills its full 2-tile footprint.
+        const S = this._currentBuildingSize || 1;
+        const _restore = S !== 1;
+        if (_restore) {
+            ctx.save();
+            ctx.translate(sx, sy);
+            ctx.scale(S, S);
+            ctx.translate(-sx, -sy);
+        }
 
         // Per-instance deterministic seed so each tile picks a growth stage
         // and decoration set. Falls back to position when no building seed.
         const seed = this._buildingSeed || (sx * 311 + sy * 457);
         const rng = this._seededRandom(seed);
-        // Pick growth stage based on seed:
+        // Township-style: lock all sawah tiles to the same harvest stage so
+        // a cluster reads as one continuous golden paddy instead of a
+        // patchwork of growth stages. (Stages can vary per-plot in future
+        // when crop-cycle gameplay is added.)
         //   0 = flooded-seedling (biru dominan, padi kecil)
         //   1 = young-green (hijau muda padat)
         //   2 = mature-green (hijau tua, blade jelas)
         //   3 = golden-harvest (kuning emas, siap panen)
-        const roll = rng();
-        const stage = roll < 0.22 ? 0
-                    : roll < 0.52 ? 1
-                    : roll < 0.80 ? 2
-                    : 3;
+        const stage = 3;
+        // burn the rng once to keep deterministic per-tile decoration jitter
+        rng();
 
         // Stage-dependent palette for rice plants
         const PAL = [
@@ -4711,55 +5315,24 @@ const Renderer = {
         const pal = PAL[stage];
 
         // ============================================================
-        // 1. PEMATANG (embankment) — thicker with proper depth & shadow
+        // 1. AUTO-TILE NEIGHBOUR DETECT — pematang is drawn at the END of
+        //    this function so it appears on top of water/rice along open
+        //    edges. Edges that border another sawah have NO pematang at all,
+        //    letting adjacent paddies merge into one continuous field.
         // ============================================================
-        // Outer shadow band (directional: sun upper-left → shadow lower-right)
-        const shadowGrad = ctx.createLinearGradient(sx - 28, sy - 14, sx + 28, sy + 14);
-        shadowGrad.addColorStop(0, 'rgba(0,0,0,0)');
-        shadowGrad.addColorStop(0.6, 'rgba(0,0,0,0)');
-        shadowGrad.addColorStop(1, 'rgba(0,0,0,0.22)');
-        ctx.fillStyle = shadowGrad;
-        this._tileDiamond(ctx, sx + 1, sy + 1.5, 60, 30);
-        ctx.fill();
-
-        // Main pematang mud (with top-down gradient for cylindrical feel)
-        const mudGrad = ctx.createLinearGradient(sx, sy - 15, sx, sy + 15);
-        mudGrad.addColorStop(0, '#b08a54');
-        mudGrad.addColorStop(0.5, '#9a7448');
-        mudGrad.addColorStop(1, '#755432');
-        ctx.fillStyle = mudGrad;
-        this._tileDiamond(ctx, sx, sy, 58, 29);
-        ctx.fill();
-
-        // Little grass tufts growing on pematang ridges (4 corners + edges)
-        const tuftSpots = [
-            { x: sx - 26, y: sy - 0.5 }, { x: sx + 26, y: sy + 0.5 },
-            { x: sx,      y: sy - 13.5 }, { x: sx,      y: sy + 13.5 },
-            { x: sx - 13, y: sy - 7.5 }, { x: sx + 13, y: sy + 7.5 },
-            { x: sx + 13, y: sy - 7.5 }, { x: sx - 13, y: sy + 7.5 },
-        ];
-        for (const t of tuftSpots) {
-            if (rng() > 0.55) continue;
-            ctx.fillStyle = `rgb(${70 + Math.floor(rng() * 25)},${140 + Math.floor(rng() * 35)},${50})`;
-            ctx.beginPath();
-            ctx.ellipse(t.x, t.y, 1.8, 0.9, 0, 0, Math.PI * 2);
-            ctx.fill();
-            // 2-3 tiny blades
-            ctx.strokeStyle = 'rgba(90,160,70,0.75)';
-            ctx.lineWidth = 0.4;
-            for (let b = 0; b < 3; b++) {
-                const bx = t.x + (rng() - 0.5) * 2.5;
-                ctx.beginPath();
-                ctx.moveTo(bx, t.y);
-                ctx.lineTo(bx + (rng() - 0.5) * 0.8, t.y - 1.3 - rng() * 0.8);
-                ctx.stroke();
-            }
-        }
+        const _tx = this._currentTileX, _ty = this._currentTileY;
+        const _hasN = this._isFarmTile(_tx - 1, _ty, 'sawah'); // upper-left
+        const _hasE = this._isFarmTile(_tx, _ty - 1, 'sawah'); // upper-right
+        const _hasS = this._isFarmTile(_tx + 1, _ty, 'sawah'); // lower-right
+        const _hasW = this._isFarmTile(_tx, _ty + 1, 'sawah'); // lower-left
 
         // ============================================================
         // 2. WATER — reflective paddy surface
         // ============================================================
-        // Water base: blue-green gradient with reflected sky tint
+        // Water fills the FULL tile diamond. Adjacent sawah water meets at the
+        // shared tile edge and merges seamlessly. Open edges get the pematang
+        // strip drawn over the water afterwards.
+        const _WW = 64, _WH = 32;
         const waterGrad = ctx.createLinearGradient(sx - 24, sy - 12, sx + 24, sy + 12);
         const wR = Math.round(60 + pal.waterTint * 40);
         const wG = Math.round(140 + pal.waterTint * 30);
@@ -4768,7 +5341,7 @@ const Renderer = {
         waterGrad.addColorStop(0.5, `rgb(${wR + 10},${wG + 15},${wB - 5})`);
         waterGrad.addColorStop(1, `rgb(${wR - 20},${wG - 20},${wB - 15})`);
         ctx.fillStyle = waterGrad;
-        this._tileDiamond(ctx, sx, sy, 52, 26);
+        this._tileDiamond(ctx, sx, sy, _WW, _WH);
         ctx.fill();
 
         // Reflected sky — soft blue radial patch upper-left (matches game sun)
@@ -4777,9 +5350,9 @@ const Renderer = {
         skyReflect.addColorStop(1, 'rgba(180,215,240,0)');
         ctx.fillStyle = skyReflect;
         ctx.save();
-        this._tileDiamond(ctx, sx, sy, 52, 26);
+        this._tileDiamond(ctx, sx, sy, _WW, _WH);
         ctx.clip();
-        ctx.fillRect(sx - 26, sy - 14, 52, 28);
+        ctx.fillRect(sx - 32, sy - 16, _WW, _WH);
         ctx.restore();
 
         // Sun glint (small bright elongated highlight, shimmering)
@@ -4802,12 +5375,12 @@ const Renderer = {
             tintGrad.addColorStop(0.5, `rgba(${gr},${gg},${gb},${ga})`);
             tintGrad.addColorStop(1, `rgba(${gr - 25},${gg - 20},${gb - 15},${ga})`);
             ctx.fillStyle = tintGrad;
-            this._tileDiamond(ctx, sx, sy, 52, 26);
+            this._tileDiamond(ctx, sx, sy, _WW, _WH);
             ctx.fill();
 
             // Furrow/row texture — diagonal lines to suggest planted rows
             ctx.save();
-            this._tileDiamond(ctx, sx, sy, 51, 25.5);
+            this._tileDiamond(ctx, sx, sy, _WW, _WH);
             ctx.clip();
             ctx.strokeStyle = `rgba(${Math.floor(gr * 0.7)},${Math.floor(gg * 0.7)},${Math.floor(gb * 0.6)},0.35)`;
             ctx.lineWidth = 0.5;
@@ -4822,7 +5395,7 @@ const Renderer = {
 
         // Ripples — a few curved arcs that drift
         ctx.save();
-        this._tileDiamond(ctx, sx, sy, 51, 25.5);
+        this._tileDiamond(ctx, sx, sy, _WW, _WH);
         ctx.clip();
         for (let r = 0; r < 4; r++) {
             const phase = anim * 0.5 + r * 1.3;
@@ -4864,15 +5437,16 @@ const Renderer = {
         // ============================================================
         const plantGap = pal.plantGap;
         const rowStep = plantGap * 0.85;
-        for (let ry = -12; ry <= 12; ry += rowStep) {
+        // Extend planting bounds to FULL tile so adjacent paddies' rice meets
+        // edge-to-edge at shared edges (no visible water gap between them).
+        for (let ry = -16; ry <= 16; ry += rowStep) {
             const rowWiggle = ((ry * 0.37) % 1) * 1.5;
-            // Offset every other row for staggered planting (real paddy rows)
             const rowOffset = (Math.floor(ry / rowStep) % 2) * (plantGap * 0.5);
-            for (let rx = -24; rx <= 24; rx += plantGap) {
+            for (let rx = -32; rx <= 32; rx += plantGap) {
                 const px = sx + rx + rowWiggle + rowOffset;
                 const py = sy + ry + Math.sin(rx * 0.12) * 0.35;
-                // Inside diamond check
-                if (Math.abs(px - sx) / 25 + Math.abs(py - sy) / 12.5 > 0.98) continue;
+                // Inside-diamond check at full tile (32 wide × 16 tall)
+                if (Math.abs(px - sx) / 32 + Math.abs(py - sy) / 16 > 0.99) continue;
                 // Skip some for organic density
                 if (rng() > pal.density) continue;
 
@@ -5060,22 +5634,131 @@ const Renderer = {
         ctx.fill();
 
         // ============================================================
-        // 8. Pematang inner edge highlight (catches sun)
+        // 8. SUBTLE OUTER GLOW — soft edge along open sides only, gives the
+        //    paddy gentle definition without an ugly hard pematang. Adjacent
+        //    sawah tiles share their edges so no shadow is drawn there.
         // ============================================================
-        ctx.strokeStyle = 'rgba(255,230,180,0.22)';
-        ctx.lineWidth = 0.7;
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(120, 90, 40, 0.35)';
+        ctx.lineWidth = 0.9;
         ctx.beginPath();
-        // Upper-left edge of inner water diamond (lit by sun)
-        ctx.moveTo(sx - 26, sy);
-        ctx.lineTo(sx, sy - 13);
+        const _eTop   = [sx,      sy - 16];
+        const _eRight = [sx + 32, sy     ];
+        const _eBot   = [sx,      sy + 16];
+        const _eLeft  = [sx - 32, sy     ];
+        if (!_hasN) { ctx.moveTo(_eTop[0],   _eTop[1]);   ctx.lineTo(_eLeft[0], _eLeft[1]); }
+        if (!_hasE) { ctx.moveTo(_eTop[0],   _eTop[1]);   ctx.lineTo(_eRight[0], _eRight[1]); }
+        if (!_hasS) { ctx.moveTo(_eRight[0], _eRight[1]); ctx.lineTo(_eBot[0], _eBot[1]); }
+        if (!_hasW) { ctx.moveTo(_eBot[0],   _eBot[1]);   ctx.lineTo(_eLeft[0], _eLeft[1]); }
         ctx.stroke();
+        ctx.restore();
+
+        if (_restore) ctx.restore();
     },
 
     // --- LADANG SAYUR ---
     _drawLadang(ctx, sx, sy, p) {
         if (p < 1) return;
         const anim = this.animTime || 0;
+        const S = this._currentBuildingSize || 1; // 1 or 2: tile footprint
 
+        // Auto-tile neighbour detection — adjacent ladang tiles share their
+        // vegetable rows and skip the earth border on shared edges.
+        const _tx = this._currentTileX, _ty = this._currentTileY;
+        const _hasN = this._isFarmTile(_tx - 1, _ty, 'ladang');
+        const _hasE = this._isFarmTile(_tx, _ty - 1, 'ladang');
+        const _hasS = this._isFarmTile(_tx + 1, _ty, 'ladang');
+        const _hasW = this._isFarmTile(_tx, _ty + 1, 'ladang');
+
+        // Outer corners == tile edge so adjacent ladang merge with no gap
+        const _oTop   = [sx,        sy - 16 * S];
+        const _oRight = [sx + 32*S, sy        ];
+        const _oBot   = [sx,        sy + 16 * S];
+        const _oLeft  = [sx - 32*S, sy        ];
+        const _iTop   = [sx,        sy - 13 * S];
+        const _iRight = [sx + 26*S, sy        ];
+        const _iBot   = [sx,        sy + 13 * S];
+        const _iLeft  = [sx - 26*S, sy        ];
+
+        const _drawBorderStrip = (oA, oB, iB, iA, fill) => {
+            ctx.fillStyle = fill;
+            ctx.beginPath();
+            ctx.moveTo(oA[0], oA[1]);
+            ctx.lineTo(oB[0], oB[1]);
+            ctx.lineTo(iB[0], iB[1]);
+            ctx.lineTo(iA[0], iA[1]);
+            ctx.closePath();
+            ctx.fill();
+        };
+
+        const innerW = 52 * S, innerH = 26 * S;
+
+        // ----- Hand-painted Township texture path -----
+        const ladangSprite = this.spriteImages.t_ladang;
+        if (ladangSprite && ladangSprite.naturalWidth) {
+            const seed = this._buildingSeed || (sx * 311 + sy * 457);
+            const rng = this._seededRandom(seed);
+
+            // Painted vegetable rows clipped to FULL tile diamond so rows
+            // extend edge-to-edge. Adjacent ladangs' rows therefore meet on
+            // the shared edge.
+            ctx.save();
+            this._tileDiamond(ctx, sx, sy, 64 * S, 32 * S);
+            ctx.clip();
+            const orient = Math.floor(rng() * 4);
+            ctx.translate(sx, sy);
+            if (orient === 1) ctx.scale(-1, 1);
+            else if (orient === 2) ctx.scale(1, -1);
+            else if (orient === 3) ctx.scale(-1, -1);
+            const sw = ladangSprite.naturalWidth;
+            const sh = ladangSprite.naturalHeight;
+            const sampleW = Math.min(sw - 4, Math.round(sw * 0.7));
+            const sampleH = Math.min(sh - 4, Math.round(sh * 0.7));
+            const ox = Math.floor(rng() * (sw - sampleW));
+            const oy = Math.floor(rng() * (sh - sampleH));
+            const dw = 66 * S, dh = 33 * S;
+            ctx.drawImage(ladangSprite, ox, oy, sampleW, sampleH,
+                          -dw / 2, -dh / 2, dw, dh);
+            ctx.restore();
+
+            // Subtle wind sway overlay — a few highlight strokes
+            ctx.save();
+            this._tileDiamond(ctx, sx, sy, 60 * S, 30 * S);
+            ctx.clip();
+            ctx.globalCompositeOperation = 'lighter';
+            const swayCount = 3 + S * 2;
+            for (let i = 0; i < swayCount; i++) {
+                const sway = Math.sin(anim * 1.1 + i * 1.4 + sx * 0.05) * 1.4;
+                const lx = sx - innerW * 0.4 + i * (innerW * 0.18) + sway;
+                const ly = sy - 4 + (i % 2) * 5;
+                ctx.fillStyle = `rgba(180,255,140,${0.10 + Math.abs(sway) * 0.04})`;
+                ctx.beginPath();
+                ctx.ellipse(lx, ly, 4 * S * 0.7, 1.2 * S * 0.7, 0.1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+
+            // Subtle outer edge glow only on open edges — gives the plot
+            // gentle definition without a hard ugly border. Adjacent ladangs
+            // merge cleanly because shared edges have no line.
+            ctx.save();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = 'rgba(90, 60, 25, 0.35)';
+            ctx.lineWidth = 0.9 * S;
+            ctx.beginPath();
+            if (!_hasN) { ctx.moveTo(_oTop[0],   _oTop[1]);   ctx.lineTo(_oLeft[0],  _oLeft[1]); }
+            if (!_hasE) { ctx.moveTo(_oTop[0],   _oTop[1]);   ctx.lineTo(_oRight[0], _oRight[1]); }
+            if (!_hasS) { ctx.moveTo(_oRight[0], _oRight[1]); ctx.lineTo(_oBot[0],   _oBot[1]); }
+            if (!_hasW) { ctx.moveTo(_oBot[0],   _oBot[1]);   ctx.lineTo(_oLeft[0],  _oLeft[1]); }
+            ctx.stroke();
+            ctx.restore();
+            return;
+        }
+
+        // ----- Fallback: procedural canvas drawing -----
         // --- Ground base (tanah) ---
         ctx.fillStyle = '#a08048';
         this._tileDiamond(ctx, sx, sy, 56, 28);
@@ -9815,8 +10498,8 @@ const Renderer = {
         const Sx = sx,     Sy = sy + 16;
         const Wx = sx - 32, Wy = sy;
 
-        // ── Stone arches at OPEN ends (no neighbour) ─────────────────────────────
-        ctx.fillStyle = '#787068';
+        // ── Concrete arches at OPEN ends (no neighbour) ──────────────────────────
+        ctx.fillStyle = '#8c8e94';
         if (doHoriz && !hasLeft) {
             ctx.beginPath();
             ctx.moveTo(LUx + 4, LUy + 3);
@@ -9851,37 +10534,38 @@ const Renderer = {
         }
 
         // ── Deck body faces (drawn back-to-front) ────────────────────────────────
+        // Concrete deck side faces (cool gray, sun upper-left)
+        const deckSide = '#7a7e86';
+        const deckFront = '#9aa0a8';
         if (isCross) {
-            // Full diamond side faces — upper-right (NW diamond edge)
-            ctx.fillStyle = '#807870';
+            ctx.fillStyle = deckSide;
             ctx.beginPath();
             ctx.moveTo(Nx, Ny); ctx.lineTo(Wx, Wy);
             ctx.lineTo(Wx, Wy - deckH); ctx.lineTo(Nx, Ny - deckH);
             ctx.closePath(); ctx.fill();
-            // Full diamond front face — lower-left (NE diamond edge, viewer-facing)
-            ctx.fillStyle = '#908880';
+            ctx.fillStyle = deckFront;
             ctx.beginPath();
             ctx.moveTo(Nx, Ny); ctx.lineTo(Ex, Ey);
             ctx.lineTo(Ex, Ey - deckH); ctx.lineTo(Nx, Ny - deckH);
             ctx.closePath(); ctx.fill();
         } else if (doHoriz) {
-            ctx.fillStyle = '#807870';
+            ctx.fillStyle = deckSide;
             ctx.beginPath();
             ctx.moveTo(LLx, LLy); ctx.lineTo(RLx, RLy);
             ctx.lineTo(RLx, RLy - deckH); ctx.lineTo(LLx, LLy - deckH);
             ctx.closePath(); ctx.fill();
-            ctx.fillStyle = '#908880';
+            ctx.fillStyle = deckFront;
             ctx.beginPath();
             ctx.moveTo(LUx, LUy); ctx.lineTo(RUx, RUy);
             ctx.lineTo(RUx, RUy - deckH); ctx.lineTo(LUx, LUy - deckH);
             ctx.closePath(); ctx.fill();
-        } else { // doVert only
-            ctx.fillStyle = '#908880';
+        } else {
+            ctx.fillStyle = deckFront;
             ctx.beginPath();
             ctx.moveTo(ULx, ULy); ctx.lineTo(DLx, DLy);
             ctx.lineTo(DLx, DLy - deckH); ctx.lineTo(ULx, ULy - deckH);
             ctx.closePath(); ctx.fill();
-            ctx.fillStyle = '#807870';
+            ctx.fillStyle = deckSide;
             ctx.beginPath();
             ctx.moveTo(URx, URy); ctx.lineTo(DRx, DRy);
             ctx.lineTo(DRx, DRy - deckH); ctx.lineTo(URx, URy - deckH);
@@ -9923,8 +10607,8 @@ const Renderer = {
             ctx.closePath(); ctx.fill();
         }
 
-        // ── Top deck surface ─────────────────────────────────────────────────────
-        ctx.fillStyle = '#606068';
+        // ── Top deck surface (asphalt over concrete) ─────────────────────────────
+        ctx.fillStyle = '#3c3c44';
         if (isCross) {
             // Full tile diamond top
             ctx.beginPath();
@@ -9943,10 +10627,10 @@ const Renderer = {
             ctx.closePath(); ctx.fill();
         }
 
-        // ── Centre dashes ─────────────────────────────────────────────────────────
-        ctx.strokeStyle = 'rgba(220,200,100,0.5)';
+        // ── Centre dashes (yellow on asphalt) ────────────────────────────────────
+        ctx.strokeStyle = '#ffd84a';
         ctx.lineWidth = 0.8;
-        ctx.setLineDash([3, 3]);
+        ctx.setLineDash([2.5, 2.5]);
         if (doHoriz) {
             ctx.beginPath();
             ctx.moveTo(lx, ly - deckH); ctx.lineTo(rx, ry - deckH);
@@ -9959,9 +10643,9 @@ const Renderer = {
         }
         ctx.setLineDash([]);
 
-        // ── White edge lines ──────────────────────────────────────────────────────
-        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-        ctx.lineWidth = 0.5;
+        // ── White edge lines on asphalt ──────────────────────────────────────────
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = 0.6;
         if (doHoriz) {
             ctx.beginPath(); ctx.moveTo(LLx, LLy - deckH); ctx.lineTo(RLx, RLy - deckH); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(LUx, LUy - deckH); ctx.lineTo(RUx, RUy - deckH); ctx.stroke();
@@ -9973,9 +10657,9 @@ const Renderer = {
 
         if (p < 0.5) return;
 
-        // ── Railings (only on sides with no neighbour) ───────────────────────────
-        ctx.fillStyle = '#a09888';
-        ctx.strokeStyle = '#b0a898';
+        // ── White concrete safety barriers (jersey-style) on open sides ──────────
+        ctx.fillStyle = '#dcdce4';
+        ctx.strokeStyle = '#ecedf2';
         ctx.lineWidth = 1;
 
         const _post = (ax, ay, bx, by) => {
@@ -13113,10 +13797,51 @@ const Renderer = {
         if (tile === GameData.TILE.WATER) return false;
         const b = Game.map.buildings[ty * size + tx];
         if (b && b.id) {
+            // Crops (sawah, ladang) are not walkable — NPCs must go around,
+            // not through the rice/vegetable fields. They have isTile=true so
+            // the generic check below would incorrectly let them through.
+            if (b.id === 'sawah' || b.id === 'ladang') return false;
             const bd = GameData.BUILDINGS[b.id];
             if (bd && !bd.isTile) return false; // solid building blocks path
         }
         return true;
+    },
+
+    // Find a walkable "front door" tile adjacent to the building's footprint.
+    // NPCs path to this tile (not into the building itself) so they appear to
+    // arrive AT the entrance instead of walking through walls. Prefers tiles
+    // that are on roads/bridges, which makes the choice feel like a real
+    // street-side entrance.
+    _findBuildingDoor(bx, by) {
+        const sz = GameData.MAP_SIZE;
+        const b = Game.map.buildings[by * sz + bx];
+        if (!b) return { x: bx, y: by };
+        const bd = GameData.BUILDINGS[b.id];
+        const W = (bd && bd.size) || 1;
+        const ox = (b.originX != null) ? b.originX : bx;
+        const oy = (b.originY != null) ? b.originY : by;
+
+        const perim = [];
+        for (let d = 0; d < W; d++) {
+            perim.push({ x: ox + d, y: oy - 1 });    // north edge
+            perim.push({ x: ox + d, y: oy + W });    // south edge
+            perim.push({ x: ox - 1, y: oy + d });    // west edge
+            perim.push({ x: ox + W, y: oy + d });    // east edge
+        }
+
+        let best = null;
+        let bestScore = -1;
+        for (const p of perim) {
+            if (!this._canWalkTile(p.x, p.y)) continue;
+            const t = Game.map.tiles[p.y * sz + p.x];
+            const isRoad = (t === GameData.TILE.ROAD || t === GameData.TILE.BRIDGE);
+            const score = isRoad ? 2 : 1; // prefer road tiles (front-door feel)
+            if (score > bestScore) { bestScore = score; best = p; }
+        }
+        // Fallback: if the building is fully enclosed (e.g. surrounded by
+        // crops/water/edge-of-map), use the origin tile so the NPC at least
+        // has a reachable target.
+        return best || { x: ox, y: oy };
     },
 
     // BFS from (x1,y1) to (x2,y2) avoiding buildings/water.
@@ -13194,7 +13919,13 @@ const Renderer = {
             let tries = 0;
             do { to = bldgs[Math.floor(Math.random() * bldgs.length)]; } while (to === from && ++tries < 5);
 
-            const path = this._findPath(from.x, from.y, to.x, to.y);
+            // Path door-to-door: NPCs spawn at the source building's entrance
+            // and walk to the destination building's entrance, never through
+            // the building footprints themselves.
+            const fromDoor = this._findBuildingDoor(from.x, from.y);
+            const toDoor = this._findBuildingDoor(to.x, to.y);
+            if (fromDoor.x === toDoor.x && fromDoor.y === toDoor.y) break;
+            const path = this._findPath(fromDoor.x, fromDoor.y, toDoor.x, toDoor.y);
             if (!path || path.length < 2) break;
 
             const skinTones = ['#deb887','#c68c53','#8d5524','#f1c27d','#e0ac69'];
@@ -13236,7 +13967,9 @@ const Renderer = {
                     let newPath = null;
                     for (let t = 0; t < 4 && !newPath; t++) {
                         const to = bldgs[Math.floor(Math.random() * bldgs.length)];
-                        const candidate = this._findPath(cur.x, cur.y, to.x, to.y);
+                        const toDoor = this._findBuildingDoor(to.x, to.y);
+                        if (cur.x === toDoor.x && cur.y === toDoor.y) continue;
+                        const candidate = this._findPath(cur.x, cur.y, toDoor.x, toDoor.y);
                         if (candidate && candidate.length >= 2) newPath = candidate;
                     }
                     if (!newPath) { this.people.splice(i, 1); continue; }
